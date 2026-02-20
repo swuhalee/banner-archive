@@ -9,11 +9,10 @@ type ArchiveItem = {
 
 type ArchivePhotoCardProps = {
   item: ArchiveItem;
-  mediaClass: string;
   fromPath?: string;
 };
 
-export default function ArchivePhotoCard({ item, mediaClass, fromPath = "/" }: ArchivePhotoCardProps) {
+export default function ArchivePhotoCard({ item, fromPath = "/" }: ArchivePhotoCardProps) {
   const safeFrom = sanitizeReturnPath(fromPath, "/");
 
   return (
@@ -23,9 +22,10 @@ export default function ArchivePhotoCard({ item, mediaClass, fromPath = "/" }: A
         className="relative block"
         aria-label={`${item.region} 상세 보기`}
       >
-        <div
-          className={`feed-media ${mediaClass}`}
-          style={{ backgroundImage: `url(${item.image})` }}
+        <img
+          src={item.image}
+          alt={item.region}
+          className="block w-full grayscale border-b border-[var(--line)]"
         />
         <div
           className="absolute inset-0 bg-black/20 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
