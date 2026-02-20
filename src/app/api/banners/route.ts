@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import { banners } from '@/server/db/schema'
+import { resolveStorageUrl } from '@/utils/supabase/storage'
 import { and, count, eq, gte, ilike, lte, or, sql } from 'drizzle-orm'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -59,8 +60,17 @@ export async function GET(request: NextRequest) {
     db.select({ total: count() }).from(banners).where(where),
   ])
 
+  const resolved = data.map((banner) => ({
+    ...banner,
+    images: banner.images.map((img) => ({
+      ...img,
+      maskedImageUrl: resolveStorageUrl(img.maskedImageUrl)!,
+      originalImageUrl: resolveStorageUrl(img.originalImageUrl),
+    })),
+  }))
+
   return NextResponse.json({
-    data,
+    data: resolved,
     pagination: {
       page,
       limit,

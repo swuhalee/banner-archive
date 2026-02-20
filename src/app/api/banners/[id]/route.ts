@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import { banners } from '@/server/db/schema'
+import { resolveStorageUrl } from '@/utils/supabase/storage'
 import { eq } from 'drizzle-orm'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -22,5 +23,12 @@ export async function GET(
     return NextResponse.json({ error: '배너를 찾을 수 없습니다' }, { status: 404 })
   }
 
-  return NextResponse.json(banner)
+  return NextResponse.json({
+    ...banner,
+    images: banner.images.map((img) => ({
+      ...img,
+      maskedImageUrl: resolveStorageUrl(img.maskedImageUrl)!,
+      originalImageUrl: resolveStorageUrl(img.originalImageUrl),
+    })),
+  })
 }

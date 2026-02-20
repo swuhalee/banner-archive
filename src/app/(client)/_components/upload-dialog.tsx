@@ -64,7 +64,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
         <div className="grid gap-4 p-8 text-center">
           <p className="font-bold">업로드가 완료되었습니다.</p>
           <p className="text-[13px] text-[var(--text-muted)]">현수막 기록이 아카이브에 추가되었습니다.</p>
-          <div className="flex justify-center gap-3">
+          {/* <div className="flex justify-center gap-3">
             <Link
               href={`/detail?id=${data.id}`}
               className="btn btn-solid text-[13px]"
@@ -74,7 +74,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
             <button type="button" className="btn btn-ghost text-[13px]" onClick={handleReset}>
               다시 업로드
             </button>
-          </div>
+          </div> */}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 max-[1024px]:grid-cols-1">

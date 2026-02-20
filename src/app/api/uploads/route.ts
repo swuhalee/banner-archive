@@ -1,6 +1,7 @@
 import { db } from '@/server/db'
 import { banners, images } from '@/server/db/schema'
 import { createAdminClient } from '@/utils/supabase/admin'
+import { resolveStorageUrl } from '@/utils/supabase/storage'
 import OpenAI from 'openai'
 import sharp from 'sharp'
 import { randomUUID } from 'crypto'
@@ -207,10 +208,8 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { data: { publicUrl: thumbUrl } } = supabase.storage.from(bucket).getPublicUrl(thumbPath)
-  const { data: { publicUrl: detailUrl } } = supabase.storage.from(bucket).getPublicUrl(detailPath)
-
   // ── 5. 배너 + 이미지 레코드 생성 ────────────────────────────────────────────
+  // DB에는 스토리지 경로만 저장 (버킷명/프로젝트 URL 변경에 영향받지 않음)
   const [banner] = await db
     .insert(banners)
     .values({
@@ -227,11 +226,19 @@ export async function POST(request: NextRequest) {
     .insert(images)
     .values({
       bannerId: banner.id,
-      originalImageUrl: detailUrl,  // 상세/확대용 (≤1.2MB)
-      maskedImageUrl: thumbUrl,     // 목록/썸네일용 (≤400KB) — 마스킹 전 임시
+      originalImageUrl: detailPath,  // 상세/확대용 경로 (≤1.2MB)
+      maskedImageUrl: thumbPath,     // 목록/썸네일용 경로 (≤400KB) — 마스킹 전 임시
       maskingStatus: 'pending',
     })
     .returning()
 
-  return NextResponse.json({ ...banner, images: [image] }, { status: 201 })
+  // 응답에는 완전한 URL로 변환하여 반환
+  return NextResponse.json({
+    ...banner,
+    images: [{
+      ...image,
+      maskedImageUrl: resolveStorageUrl(image.maskedImageUrl)!,
+      originalImageUrl: resolveStorageUrl(image.originalImageUrl),
+    }],
+  }, { status: 201 })
 }
