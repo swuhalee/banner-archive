@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   BarChart,
@@ -52,47 +52,23 @@ export default function StatsPage() {
   const [fromInput, setFromInput] = useState(searchParams.get('from') ?? '')
   const [toInput, setToInput] = useState(searchParams.get('to') ?? '')
   const [regionInput, setRegionInput] = useState(searchParams.get('region') ?? '')
+  const [region, setRegion] = useState(searchParams.get('region') ?? '')
   const [subjectType, setSubjectType] = useState(searchParams.get('subjectType') ?? '')
+  const [hashtagInput, setHashtagInput] = useState(searchParams.get('hashtag') ?? '')
   const [hashtag, setHashtag] = useState(searchParams.get('hashtag') ?? '')
-
-  // URL 쿼리스트링 동기화
-  const syncUrl = useCallback(
-    (params: StatsParams) => {
-      const sp = new URLSearchParams()
-      if (params.from) sp.set('from', params.from)
-      if (params.to) sp.set('to', params.to)
-      if (params.region) sp.set('region', params.region)
-      if (params.subjectType) sp.set('subjectType', params.subjectType)
-      if (params.hashtag) sp.set('hashtag', params.hashtag)
-      router.replace(`/stats?${sp}`, { scroll: false })
-    },
-    [router],
-  )
-
-  // 400ms 디바운스 적용된 지역 필터
-  const [debouncedRegion, setDebouncedRegion] = useState(regionInput)
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedRegion(regionInput), 400)
-    return () => clearTimeout(t)
-  }, [regionInput])
 
   const queryParams: StatsParams = {
     from: fromInput || undefined,
     to: toInput || undefined,
-    region: debouncedRegion || undefined,
+    region: region || undefined,
     subjectType: subjectType || undefined,
     hashtag: hashtag || undefined,
     limit: 10,
   }
 
-  useEffect(() => {
-    syncUrl(queryParams)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryParams.from, queryParams.to, debouncedRegion, queryParams.subjectType, queryParams.hashtag])
-
   const { data, isPending, isError } = useStatsOverview(queryParams)
 
-  const hasFilter = !!(fromInput || toInput || debouncedRegion || subjectType || hashtag)
+  const hasFilter = !!(fromInput || toInput || region || subjectType || hashtag)
 
   return (
     <div className="stack-lg">
@@ -123,9 +99,10 @@ export default function StatsPage() {
         />
         <input
           type="text"
-          placeholder="지역 검색"
+          placeholder="지역 검색 (Enter로 검색)"
           value={regionInput}
           onChange={(e) => setRegionInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') setRegion(regionInput) }}
         />
         <select value={subjectType} onChange={(e) => setSubjectType(e.target.value)}>
           <option value="">주체 전체</option>
@@ -137,9 +114,10 @@ export default function StatsPage() {
         </select>
         <input
           type="text"
-          placeholder="해시태그"
-          value={hashtag}
-          onChange={(e) => setHashtag(e.target.value)}
+          placeholder="해시태그 (Enter로 검색)"
+          value={hashtagInput}
+          onChange={(e) => setHashtagInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') setHashtag(hashtagInput) }}
         />
       </section>
 
@@ -151,7 +129,9 @@ export default function StatsPage() {
             setFromInput('')
             setToInput('')
             setRegionInput('')
+            setRegion('')
             setSubjectType('')
+            setHashtagInput('')
             setHashtag('')
           }}
         >
@@ -230,7 +210,7 @@ export default function StatsPage() {
                     cursor="pointer"
                     onClick={(d: unknown) => {
                       const entry = d as { region: string }
-                      if (entry?.region) setRegionInput(entry.region)
+                      if (entry?.region) { setRegionInput(entry.region); setRegion(entry.region) }
                     }}
                   />
                 </BarChart>
@@ -309,7 +289,7 @@ export default function StatsPage() {
                     cursor="pointer"
                     onClick={(d: unknown) => {
                       const entry = d as { tag: string }
-                      if (entry?.tag) setHashtag(entry.tag)
+                      if (entry?.tag) { setHashtagInput(entry.tag); setHashtag(entry.tag) }
                     }}
                   />
                 </BarChart>
@@ -370,7 +350,7 @@ export default function StatsPage() {
                   <tr
                     key={r.region}
                     style={{ borderBottom: '1px solid var(--line-base)', cursor: 'pointer' }}
-                    onClick={() => setRegionInput(r.region)}
+                    onClick={() => { setRegionInput(r.region); setRegion(r.region) }}
                   >
                     <td style={{ padding: '6px 12px' }}>{r.region}</td>
                     <td style={{ textAlign: 'right', padding: '6px 12px', fontVariantNumeric: 'tabular-nums' }}>

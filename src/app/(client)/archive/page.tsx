@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useBanners } from '@/lib/hooks/banners'
 import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from '@/lib/constants/banner-subject-types'
 import type { Banner } from '@/types/banner'
@@ -11,12 +11,6 @@ export default function ArchivePage() {
   const [regionInput, setRegionInput] = useState('')
   const [region, setRegion] = useState('')
   const [subjectType, setSubjectType] = useState<BannerSubjectType | 'all'>('all')
-
-  // 400ms 디바운스
-  useEffect(() => {
-    const t = setTimeout(() => setRegion(regionInput), 400)
-    return () => clearTimeout(t)
-  }, [regionInput])
 
   const { data, isPending } = useBanners({
     region: region || undefined,
@@ -37,9 +31,10 @@ export default function ArchivePage() {
       <section className="grid grid-cols-[2fr_1fr_1fr] gap-2 pb-[10px] max-[1024px]:grid-cols-1">
         <input
           type="text"
-          placeholder="지역 검색"
+          placeholder="지역 검색 (Enter로 검색)"
           value={regionInput}
           onChange={(e) => setRegionInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') setRegion(regionInput) }}
         />
         <select value={subjectType} onChange={(e) => setSubjectType(e.target.value as BannerSubjectType | 'all')}>
           <option value="all">주체 전체</option>
