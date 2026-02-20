@@ -5,6 +5,7 @@ import { useBanners } from '@/lib/hooks/banners'
 import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from '@/lib/constants/banner-subject-types'
 import type { Banner } from '@/types/banner'
 import ArchivePhotoCard from '../_components/archive-photo-card'
+import { SkeletonPhotoCard } from '../_components/skeleton'
 
 export default function ArchivePage() {
   const [regionInput, setRegionInput] = useState('')
@@ -54,14 +55,19 @@ export default function ArchivePage() {
       </section>
 
       {isPending && (
-        <p className="text-[13px] text-[var(--text-muted)]">불러오는 중...</p>
+        <div className="masonry">
+          {Array.from({ length: 12 }, (_, i) => (
+            <SkeletonPhotoCard key={i} mediaClass={`media-${(i % 4) + 1}`} />
+          ))}
+        </div>
       )}
 
       {!isPending && (!grouped || Object.keys(grouped).length === 0) && (
-        <p className="text-[13px] text-[var(--text-muted)]">검색 결과가 없습니다.</p>
+        <p className="text-[13px] text-(--text-muted)">검색 결과가 없습니다.</p>
       )}
 
-      {grouped &&
+      {!isPending &&
+        grouped &&
         Object.entries(grouped).map(([regionKey, items]) => (
           <section key={regionKey} className="stack-md">
             <div className="grid gap-1">

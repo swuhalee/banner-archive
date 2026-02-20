@@ -24,10 +24,10 @@ export default function ClientLayout({
                 아카이브
               </Link>
               <Link
-                href="/collections"
+                href="/stats"
                 className="px-4 py-2 text-[13px] font-medium text-[var(--text-muted)] hover:shadow-[inset_0_-1.5px_0_var(--line-strong)] active:shadow-[inset_0_-1.5px_0_var(--line-strong)]"
               >
-                컬렉션
+                통계
               </Link>
             </nav>
 

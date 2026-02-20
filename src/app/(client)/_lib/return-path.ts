@@ -1,4 +1,4 @@
-const ALLOWED_RETURN_PATHS = new Set(["/", "/archive", "/collections"]);
+const ALLOWED_RETURN_PATHS = new Set(["/", "/archive", "/stats"]);
 
 // 사용자가 넘긴 from 값을 "앱 내부 경로" 형태로 정리하는 함수
 // 예) /archive/?x=1 -> /archive
@@ -18,10 +18,10 @@ function normalizePath(input: string) {
 
 // 최종적으로 허용된 경로 목록에 있는 값만 통과시킴
 // 유효하지 않으면 fallback(기본값)으로 안전하게 대체
-export function sanitizeReturnPath(input: string | null | undefined, fallback: "/" | "/archive" | "/collections" = "/") {
+export function sanitizeReturnPath(input: string | null | undefined, fallback: "/" | "/archive" | "/stats" = "/") {
   if (!input) return fallback;
   const normalized = normalizePath(input);
   if (!normalized) return fallback;
   if (!ALLOWED_RETURN_PATHS.has(normalized)) return fallback;
-  return normalized as "/" | "/archive" | "/collections";
+  return normalized as "/" | "/archive" | "/stats";
 }
