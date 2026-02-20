@@ -98,7 +98,9 @@ export const bannerObservations = pgTable('banner_observations', {
 
 export const appeals = pgTable('appeals', {
   id: uuid('id').primaryKey().notNull().default(sql`gen_random_uuid()`),
-  bannerId: text('banner_id').notNull(),
+  bannerId: uuid('banner_id')
+    .notNull()
+    .references(() => banners.id, { onDelete: 'cascade' }),
   reasonType: appealReasonTypeEnum('reason_type').notNull(),
   reasonDetail: text('reason_detail'),
   status: appealStatusEnum('status').notNull().default('received'),

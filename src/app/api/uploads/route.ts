@@ -2,11 +2,48 @@ import { db } from '@/server/db'
 import { banners, images } from '@/server/db/schema'
 import { createAdminClient } from '@/utils/supabase/admin'
 import OpenAI from 'openai'
+import sharp from 'sharp'
 import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
 const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
+
+// ─── 이미지 압축 ───────────────────────────────────────────────────────────────
+
+/**
+ * 이미지를 WebP로 변환하면서 목표 크기 이하가 될 때까지 품질을 점진적으로 낮춤.
+ * @param input        원본 이미지 Buffer
+ * @param maxWidth     리사이즈 최대 너비 (px)
+ * @param targetMaxKB  목표 최대 파일 크기 (KB)
+ * @param startQuality 시작 WebP 품질 (0–100)
+ */
+async function compressToTarget(
+  input: Buffer,
+  maxWidth: number,
+  targetMaxKB: number,
+  startQuality = 82,
+): Promise<Buffer> {
+  let quality = startQuality
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const result = await sharp(input)
+      .rotate()                                                          // EXIF orientation 자동 보정
+      .resize({ width: maxWidth, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality, effort: 4 })
+      .toBuffer()
+
+    if (result.length <= targetMaxKB * 1024 || quality <= 30) return result
+    quality = Math.max(30, quality - 8)
+  }
+
+  // 최저 품질(30) fallback
+  return sharp(input)
+    .rotate()
+    .resize({ width: maxWidth, fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 30, effort: 4 })
+    .toBuffer()
+}
 
 // ─── OpenAI 분석 ──────────────────────────────────────────────────────────────
 
@@ -124,21 +161,31 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // ── 3. 이미지 읽기 ───────────────────────────────────────────────────────────
-  const imageBuffer = await imageFile.arrayBuffer()
-  const imageBytes = new Uint8Array(imageBuffer)
-  const base64 = Buffer.from(imageBuffer).toString('base64')
+  // ── 3. 이미지 읽기 + 압축 ────────────────────────────────────────────────────
+  const originalBuffer = Buffer.from(await imageFile.arrayBuffer())
+  const base64 = originalBuffer.toString('base64') // OpenAI 분석용 (원본 품질)
 
-  const ext = imageFile.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-  const storagePath = `${randomUUID()}.${ext}`
+  // 두 가지 크기로 병렬 압축
+  const [thumbBuffer, detailBuffer] = await Promise.all([
+    compressToTarget(originalBuffer, 1200, 400, 78),   // 목록/썸네일: ≤400KB
+    compressToTarget(originalBuffer, 2400, 1200, 85),  // 상세/확대: ≤1.2MB
+  ])
+
+  const fileId = randomUUID()
+  const thumbPath = `${fileId}-thumb.webp`
+  const detailPath = `${fileId}-detail.webp`
   const bucket = process.env.SUPABASE_STORAGE_BUCKET!
 
   // ── 4. Storage 업로드 + OpenAI 분석 병렬 실행 ───────────────────────────────
   const supabase = createAdminClient()
 
-  const [storageResult, analysis] = await Promise.all([
-    supabase.storage.from(bucket).upload(storagePath, imageBytes, {
-      contentType: imageFile.type,
+  const [thumbResult, detailResult, analysis] = await Promise.all([
+    supabase.storage.from(bucket).upload(thumbPath, thumbBuffer, {
+      contentType: 'image/webp',
+      upsert: false,
+    }),
+    supabase.storage.from(bucket).upload(detailPath, detailBuffer, {
+      contentType: 'image/webp',
       upsert: false,
     }),
     analyzeBannerImage(base64, imageFile.type).catch(() => ({
@@ -147,16 +194,21 @@ export async function POST(request: NextRequest) {
     })),
   ])
 
-  if (storageResult.error) {
+  if (thumbResult.error) {
     return NextResponse.json(
-      { error: `이미지 업로드 실패: ${storageResult.error.message}` },
+      { error: `썸네일 업로드 실패: ${thumbResult.error.message}` },
+      { status: 500 }
+    )
+  }
+  if (detailResult.error) {
+    return NextResponse.json(
+      { error: `상세 이미지 업로드 실패: ${detailResult.error.message}` },
       { status: 500 }
     )
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from(bucket).getPublicUrl(storagePath)
+  const { data: { publicUrl: thumbUrl } } = supabase.storage.from(bucket).getPublicUrl(thumbPath)
+  const { data: { publicUrl: detailUrl } } = supabase.storage.from(bucket).getPublicUrl(detailPath)
 
   // ── 5. 배너 + 이미지 레코드 생성 ────────────────────────────────────────────
   const [banner] = await db
@@ -175,8 +227,8 @@ export async function POST(request: NextRequest) {
     .insert(images)
     .values({
       bannerId: banner.id,
-      originalImageUrl: publicUrl,
-      maskedImageUrl: publicUrl, // 마스킹 완료 전 임시로 원본 URL 사용
+      originalImageUrl: detailUrl,  // 상세/확대용 (≤1.2MB)
+      maskedImageUrl: thumbUrl,     // 목록/썸네일용 (≤400KB) — 마스킹 전 임시
       maskingStatus: 'pending',
     })
     .returning()
