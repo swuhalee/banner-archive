@@ -1,8 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import RouteDialog from "./route-dialog";
-import { useAnalyzeBanner, useCommitBanner } from "@/lib/hooks/banners";
+import { useAnalyzeBanner, bannerKeys } from "@/lib/hooks/banners";
+import { commitBannerWithProgress } from "@/lib/api/banners";
 import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from "@/lib/constants/banner-subject-types";
 import type { BBox, UploadCandidate } from "@/types/banner";
 
@@ -42,10 +44,12 @@ function toEditable(c: UploadCandidate): EditableCandidate {
 // ─── 컴포넌트 ──────────────────────────────────────────────────────────────────
 
 export default function UploadDialog({ closeHref = "/", asModal = true }: UploadDialogProps) {
+  const queryClient = useQueryClient();
   const analyzeMutation = useAnalyzeBanner();
-  const commitMutation = useCommitBanner();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const analyzeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [regionText, setRegionText] = useState("");
@@ -59,6 +63,8 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
   const [candidates, setCandidates] = useState<EditableCandidate[]>([]);
   const [savedCount, setSavedCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [analyzeProgress, setAnalyzeProgress] = useState(0);
+  const [commitProgress, setCommitProgress] = useState(0);
 
   // ── 파일 선택 ────────────────────────────────────────────────────────────────
   function handleFileSelect(file: File) {
@@ -78,8 +84,11 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
 
   // ── 전체 초기화 ──────────────────────────────────────────────────────────────
   function handleReset() {
+    if (analyzeTimerRef.current) {
+      clearInterval(analyzeTimerRef.current);
+      analyzeTimerRef.current = null;
+    }
     analyzeMutation.reset();
-    commitMutation.reset();
     setStep("form");
     setSelectedFile(null);
     setPreviewUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
@@ -91,6 +100,8 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
     setUploadSourceId("");
     setCandidates([]);
     setErrorMessage(null);
+    setAnalyzeProgress(0);
+    setCommitProgress(0);
   }
 
   // ── Step 1 → Step 2: 분석 요청 ──────────────────────────────────────────────
@@ -104,10 +115,24 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
     if (subjectType) formData.append("subjectType", subjectType);
 
     setStep("analyzing");
+    setAnalyzeProgress(0);
     setErrorMessage(null);
+
+    // 시뮬레이션 progress: 지수 감쇠로 90%까지 서서히 증가
+    let elapsed = 0;
+    analyzeTimerRef.current = setInterval(() => {
+      elapsed += 200;
+      setAnalyzeProgress(Math.min(89, Math.round(90 * (1 - Math.exp(-elapsed / 12000)))));
+    }, 200);
 
     analyzeMutation.mutate(formData, {
       onSuccess: (data) => {
+        if (analyzeTimerRef.current) {
+          clearInterval(analyzeTimerRef.current);
+          analyzeTimerRef.current = null;
+        }
+        setAnalyzeProgress(100);
+
         if (data.candidates.length === 0) {
           setErrorMessage("현수막을 인식할 수 없습니다. 다른 사진을 업로드해주세요.");
           setStep("form");
@@ -115,9 +140,13 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
         }
         setUploadSourceId(data.uploadSourceId);
         setCandidates(data.candidates.map(toEditable));
-        setStep("review");
+        setTimeout(() => setStep("review"), 300);
       },
       onError: (err) => {
+        if (analyzeTimerRef.current) {
+          clearInterval(analyzeTimerRef.current);
+          analyzeTimerRef.current = null;
+        }
         setErrorMessage(err instanceof Error ? err.message : "분석에 실패했습니다");
         setStep("form");
       },
@@ -125,7 +154,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
   }
 
   // ── Step 3 → Step 4: 저장 요청 ──────────────────────────────────────────────
-  function handleCommit() {
+  async function handleCommit() {
     const selected = candidates.filter((c) => !c.excluded);
     if (selected.length === 0) return;
 
@@ -139,21 +168,21 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
     }));
 
     setStep("committing");
+    setCommitProgress(0);
     setErrorMessage(null);
 
-    commitMutation.mutate(
-      { uploadSourceId, selectedCandidates },
-      {
-        onSuccess: (data) => {
-          setSavedCount(data.count);
-          setStep("done");
-        },
-        onError: (err) => {
-          setErrorMessage(err instanceof Error ? err.message : "저장에 실패했습니다");
-          setStep("review");
-        },
-      },
-    );
+    try {
+      const data = await commitBannerWithProgress(
+        { uploadSourceId, selectedCandidates },
+        (percent) => setCommitProgress(percent),
+      );
+      queryClient.invalidateQueries({ queryKey: bannerKeys.lists() });
+      setSavedCount(data.count);
+      setStep("done");
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "저장에 실패했습니다");
+      setStep("review");
+    }
   }
 
   // ── 후보 개별 필드 업데이트 ─────────────────────────────────────────────────
@@ -165,6 +194,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
 
   const canAnalyze = Boolean(selectedFile && regionText && observedAt && confirmed1 && confirmed2);
   const activeCount = candidates.filter((c) => !c.excluded).length;
+  const currentProgress = step === "analyzing" ? analyzeProgress : commitProgress;
 
   // ─── 렌더링 ──────────────────────────────────────────────────────────────────
 
@@ -198,6 +228,18 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
           <p className="font-bold">
             {step === "analyzing" ? "현수막을 감지하고 있습니다" : "저장 중"}
           </p>
+          <div className="mx-auto w-full max-w-[260px]">
+            <div className="mb-1.5 flex items-center justify-between text-[12px] text-[var(--text-muted)]">
+              <span>{step === "analyzing" ? "분석 중..." : "저장 중..."}</span>
+              <span className="font-semibold tabular-nums">{currentProgress}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--line)]">
+              <div
+                className="h-full rounded-full bg-[#3b82f6] transition-all duration-300 ease-out"
+                style={{ width: `${currentProgress}%` }}
+              />
+            </div>
+          </div>
         </div>
       )}
 

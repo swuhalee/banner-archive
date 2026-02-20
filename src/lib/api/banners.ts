@@ -69,3 +69,42 @@ export async function commitBanner(data: CommitRequest): Promise<CommitResponse>
   }
   return res.json()
 }
+
+export async function commitBannerWithProgress(
+  data: CommitRequest,
+  onProgress: (percent: number) => void,
+): Promise<CommitResponse> {
+  const res = await fetch('/api/uploads/commit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+
+  if (!res.ok || !res.body) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? '저장에 실패했습니다')
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const event = JSON.parse(line.slice(6)) as Record<string, unknown>
+      if (typeof event.error === 'string') throw new Error(event.error)
+      if (typeof event.progress === 'number') onProgress(event.progress)
+      if (event.done) return event.data as CommitResponse
+    }
+  }
+
+  throw new Error('스트림이 예상치 않게 종료되었습니다')
+}

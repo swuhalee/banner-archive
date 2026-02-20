@@ -45,8 +45,8 @@ async function cropImage(rotatedBuffer: Buffer, bbox: BBox): Promise<Buffer> {
   // 수직: AI 인식이 실제보다 bbox 높이의 ~50% 아래에 치우쳐 있으므로
   //   상단 = 오프셋 보정(0.5) + 여백(0.25) = 0.75배 위로
   //   하단 = 여백(0.5) → 총 크롭 높이 ≈ 2.25배
-  const topPad = bbox.height * 0.5
-  const bottomPad = bbox.height * 0.7
+  const topPad = bbox.height * 0.8
+  const bottomPad = bbox.height * 0.8
 
   const left = Math.max(0, Math.floor((bbox.x - padX) * imgWidth))
   const top = Math.max(0, Math.floor((bbox.y - topPad) * imgHeight))
@@ -66,8 +66,12 @@ async function cropImage(rotatedBuffer: Buffer, bbox: BBox): Promise<Buffer> {
 // POST /api/uploads/commit
 // Content-Type: application/json
 // Body: { uploadSourceId: string, selectedCandidates: CommitCandidate[] }
+// Response: text/event-stream (SSE)
+//   data: { progress: number }
+//   data: { progress: 100, done: true, data: CommitResponse }
+//   data: { error: string }
 export async function POST(request: NextRequest) {
-  // ── 1. 요청 파싱 ──────────────────────────────────────────────────────────────
+  // ── 1. 요청 파싱 및 검증 (스트림 시작 전에 처리) ─────────────────────────────
   let body: { uploadSourceId?: string; selectedCandidates?: CommitCandidate[] }
   try {
     body = await request.json()
@@ -84,120 +88,153 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '저장할 현수막을 최소 1개 선택해주세요' }, { status: 400 })
   }
 
-  // ── 2. upload_sources 조회 ───────────────────────────────────────────────────
-  const [uploadSource] = await db
-    .select()
-    .from(uploadSources)
-    .where(eq(uploadSources.id, uploadSourceId))
+  const encoder = new TextEncoder()
+  const total = selectedCandidates.length
 
-  if (!uploadSource) {
-    return NextResponse.json({ error: '업로드 원본을 찾을 수 없습니다' }, { status: 404 })
-  }
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (data: object) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+      }
 
-  // ── 3. 원본 이미지 다운로드 + EXIF 보정 ──────────────────────────────────────
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET!
-  const supabase = createAdminClient()
+      try {
+        // ── 2. upload_sources 조회 (5%) ────────────────────────────────────────
+        send({ progress: 5 })
+        const [uploadSource] = await db
+          .select()
+          .from(uploadSources)
+          .where(eq(uploadSources.id, uploadSourceId))
 
-  const { data: sourceBlob, error: downloadError } = await supabase.storage
-    .from(bucket)
-    .download(uploadSource.sourceImageUrl)
+        if (!uploadSource) {
+          send({ error: '업로드 원본을 찾을 수 없습니다' })
+          controller.close()
+          return
+        }
 
-  if (downloadError || !sourceBlob) {
-    return NextResponse.json(
-      { error: `원본 이미지 다운로드 실패: ${downloadError?.message ?? '알 수 없는 오류'}` },
-      { status: 500 },
-    )
-  }
+        // ── 3. 원본 이미지 다운로드 + EXIF 보정 (10%) ─────────────────────────
+        send({ progress: 10 })
+        const bucket = process.env.SUPABASE_STORAGE_BUCKET!
+        const supabase = createAdminClient()
 
-  const sourceBuffer = Buffer.from(await sourceBlob.arrayBuffer())
-  // EXIF 회전 보정 후 크롭 기준으로 사용
-  const rotatedBuffer = await sharp(sourceBuffer).rotate().toBuffer()
+        const { data: sourceBlob, error: downloadError } = await supabase.storage
+          .from(bucket)
+          .download(uploadSource.sourceImageUrl)
 
-  // ── 4. 각 후보별 크롭 + 압축 + Storage 업로드 ────────────────────────────────
-  type CropUploadResult = {
-    candidate: CommitCandidate
-    thumbPath: string
-    detailPath: string
-  }
+        if (downloadError || !sourceBlob) {
+          send({ error: `원본 이미지 다운로드 실패: ${downloadError?.message ?? '알 수 없는 오류'}` })
+          controller.close()
+          return
+        }
 
-  const cropResults: CropUploadResult[] = await Promise.all(
-    selectedCandidates.map(async (candidate) => {
-      const cropBuffer = await cropImage(rotatedBuffer, candidate.bbox)
+        const sourceBuffer = Buffer.from(await sourceBlob.arrayBuffer())
+        const rotatedBuffer = await sharp(sourceBuffer).rotate().toBuffer()
+        send({ progress: 20 })
 
-      const [thumbBuffer, detailBuffer] = await Promise.all([
-        compressToTarget(cropBuffer, 1200, 400, 78),
-        compressToTarget(cropBuffer, 2400, 1200, 85),
-      ])
+        // ── 4. 각 후보별 크롭 + 압축 + Storage 업로드 (20% → 88%) ────────────
+        type CropUploadResult = {
+          candidate: CommitCandidate
+          thumbPath: string
+          detailPath: string
+        }
 
-      const cropId = randomUUID()
-      const thumbPath = `${cropId}-thumb.webp`
-      const detailPath = `${cropId}-detail.webp`
+        let completed = 0
+        const cropResults: CropUploadResult[] = await Promise.all(
+          selectedCandidates.map(async (candidate) => {
+            const cropBuffer = await cropImage(rotatedBuffer, candidate.bbox)
 
-      const [thumbResult, detailResult] = await Promise.all([
-        supabase.storage.from(bucket).upload(thumbPath, thumbBuffer, {
-          contentType: 'image/webp',
-          upsert: false,
-        }),
-        supabase.storage.from(bucket).upload(detailPath, detailBuffer, {
-          contentType: 'image/webp',
-          upsert: false,
-        }),
-      ])
+            const [thumbBuffer, detailBuffer] = await Promise.all([
+              compressToTarget(cropBuffer, 1200, 400, 78),
+              compressToTarget(cropBuffer, 2400, 1200, 85),
+            ])
 
-      if (thumbResult.error) throw new Error(`썸네일 업로드 실패: ${thumbResult.error.message}`)
-      if (detailResult.error) throw new Error(`상세 이미지 업로드 실패: ${detailResult.error.message}`)
+            const cropId = randomUUID()
+            const thumbPath = `${cropId}-thumb.webp`
+            const detailPath = `${cropId}-detail.webp`
 
-      return { candidate, thumbPath, detailPath }
-    }),
-  )
+            const [thumbResult, detailResult] = await Promise.all([
+              supabase.storage.from(bucket).upload(thumbPath, thumbBuffer, {
+                contentType: 'image/webp',
+                upsert: false,
+              }),
+              supabase.storage.from(bucket).upload(detailPath, detailBuffer, {
+                contentType: 'image/webp',
+                upsert: false,
+              }),
+            ])
 
-  // ── 5. DB 트랜잭션으로 배너 + 이미지 + banner_sources 일괄 삽입 ────────────────
-  const observedDate = uploadSource.observedAt
+            if (thumbResult.error) throw new Error(`썸네일 업로드 실패: ${thumbResult.error.message}`)
+            if (detailResult.error) throw new Error(`상세 이미지 업로드 실패: ${detailResult.error.message}`)
 
-  const insertedBannerIds = await db.transaction(async (tx) => {
-    const ids: string[] = []
+            completed++
+            // 20% ~ 88% 구간을 현수막 수 기준으로 균등 배분
+            send({ progress: Math.round(20 + (completed / total) * 68) })
 
-    for (const { candidate, thumbPath, detailPath } of cropResults) {
-      const [banner] = await tx
-        .insert(banners)
-        .values({
-          title: candidate.title,
-          hashtags: candidate.hashtags,
-          subjectType: candidate.subjectType ?? uploadSource.subjectType,
-          regionText: uploadSource.regionText,
-          firstSeenAt: observedDate,
-          lastSeenAt: observedDate,
+            return { candidate, thumbPath, detailPath }
+          }),
+        )
+
+        // ── 5. DB 트랜잭션으로 배너 + 이미지 + banner_sources 일괄 삽입 (92%) ─
+        send({ progress: 92 })
+        const observedDate = uploadSource.observedAt
+
+        const insertedBannerIds = await db.transaction(async (tx) => {
+          const ids: string[] = []
+
+          for (const { candidate, thumbPath, detailPath } of cropResults) {
+            const [banner] = await tx
+              .insert(banners)
+              .values({
+                title: candidate.title,
+                hashtags: candidate.hashtags,
+                subjectType: candidate.subjectType ?? uploadSource.subjectType,
+                regionText: uploadSource.regionText,
+                firstSeenAt: observedDate,
+                lastSeenAt: observedDate,
+              })
+              .returning()
+
+            await tx
+              .insert(images)
+              .values({
+                bannerId: banner.id,
+                maskedImageUrl: thumbPath,
+                originalImageUrl: detailPath,
+                maskingStatus: 'pending',
+              })
+              .returning()
+
+            await tx.insert(bannerSources).values({
+              bannerId: banner.id,
+              uploadSourceId: uploadSource.id,
+              bbox: candidate.bbox,
+              confidence: candidate.confidence,
+            })
+
+            ids.push(banner.id)
+          }
+
+          return ids
         })
-        .returning()
 
-      const [image] = await tx
-        .insert(images)
-        .values({
-          bannerId: banner.id,
-          maskedImageUrl: thumbPath,
-          originalImageUrl: detailPath,
-          maskingStatus: 'pending',
+        // ── 완료 ────────────────────────────────────────────────────────────────
+        send({
+          progress: 100,
+          done: true,
+          data: { bannerIds: insertedBannerIds, count: insertedBannerIds.length },
         })
-        .returning()
-
-      await tx.insert(bannerSources).values({
-        bannerId: banner.id,
-        uploadSourceId: uploadSource.id,
-        bbox: candidate.bbox,
-        confidence: candidate.confidence,
-      })
-
-      ids.push(banner.id)
-    }
-
-    return ids
+        controller.close()
+      } catch (err) {
+        send({ error: err instanceof Error ? err.message : '저장에 실패했습니다' })
+        controller.close()
+      }
+    },
   })
 
-  return NextResponse.json(
-    {
-      bannerIds: insertedBannerIds,
-      count: insertedBannerIds.length,
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
     },
-    { status: 201 },
-  )
+  })
 }
