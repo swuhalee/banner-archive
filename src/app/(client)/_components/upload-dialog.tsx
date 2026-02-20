@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useDaumPostcodePopup } from "react-daum-postcode";
 import RouteDialog from "./route-dialog";
 import { useAnalyzeBanner, bannerKeys } from "@/lib/hooks/banners";
 import { commitBannerWithProgress } from "@/lib/api/banners";
@@ -47,6 +48,8 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
   const queryClient = useQueryClient();
   const analyzeMutation = useAnalyzeBanner();
 
+  const openPostcode = useDaumPostcodePopup();
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const analyzeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -65,6 +68,15 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [analyzeProgress, setAnalyzeProgress] = useState(0);
   const [commitProgress, setCommitProgress] = useState(0);
+
+  // ── 주소 검색 ────────────────────────────────────────────────────────────────
+  function handleAddressSearch() {
+    openPostcode({
+      onComplete: (data) => {
+        setRegionText(data.address);
+      },
+    });
+  }
 
   // ── 파일 선택 ────────────────────────────────────────────────────────────────
   function handleFileSelect(file: File) {
@@ -230,7 +242,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
           </p>
           <div className="mx-auto w-full max-w-[260px]">
             <div className="mb-1.5 flex items-center justify-between text-[12px] text-[var(--text-muted)]">
-              <span>{step === "analyzing" ? "분석 중..." : "저장 중..."}</span>
+              {/* <span>{step === "analyzing" ? "분석 중..." : "저장 중..."}</span> */}
               <span className="font-semibold tabular-nums">{currentProgress}%</span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--line)]">
@@ -246,7 +258,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
       {/* ── 검토 화면 ─────────────────────────────────────────────────────────── */}
       {step === "review" && (
         <div className="grid gap-4">
-          <h2 className="font-bold">감지된 현수막 검토</h2>
+          {/* <h2 className="font-bold">감지된 현수막 검토</h2> */}
 
           {/* 이미지 + bbox 오버레이 */}
           <div className="relative w-full overflow-hidden rounded-[12px] border border-[var(--line)]">
@@ -397,15 +409,25 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
           >
             <h2 className="mb-1 font-bold">정보 입력</h2>
 
-            <label className="grid gap-1.5 text-[13px] font-semibold text-[var(--text-muted)]">
+            <div className="grid gap-1.5 text-[13px] font-semibold text-[var(--text-muted)]">
               위치
-              <input
-                type="text"
-                placeholder="예: 서울 영등포구 영등포동"
-                value={regionText}
-                onChange={(e) => setRegionText(e.target.value)}
-              />
-            </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="주소 검색을 눌러 선택하세요"
+                  value={regionText}
+                  readOnly
+                  className="flex-1"
+                />
+                <button
+                  type="button"
+                  className="btn btn-ghost shrink-0 text-[13px]"
+                  onClick={handleAddressSearch}
+                >
+                  주소 검색
+                </button>
+              </div>
+            </div>
 
             <label className="grid gap-1.5 text-[13px] font-semibold text-[var(--text-muted)]">
               관측일
