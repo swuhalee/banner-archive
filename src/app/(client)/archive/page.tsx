@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { useBanners } from '@/lib/hooks/banners'
+import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from '@/lib/constants/banner-subject-types'
 import type { Banner } from '@/types/banner'
 import ArchivePhotoCard from '../_components/archive-photo-card'
 
 export default function ArchivePage() {
   const [regionInput, setRegionInput] = useState('')
   const [region, setRegion] = useState('')
+  const [subjectType, setSubjectType] = useState<BannerSubjectType | 'all'>('all')
 
   // 400ms 디바운스
   useEffect(() => {
@@ -15,7 +17,11 @@ export default function ArchivePage() {
     return () => clearTimeout(t)
   }, [regionInput])
 
-  const { data, isPending } = useBanners({ region: region || undefined, limit: 60 })
+  const { data, isPending } = useBanners({
+    region: region || undefined,
+    subjectType: subjectType === 'all' ? undefined : subjectType,
+    limit: 60,
+  })
 
   // 최상위 지역명(첫 단어)으로 그룹핑
   const grouped = data?.data.reduce<Record<string, Banner[]>>((acc, banner) => {
@@ -34,12 +40,11 @@ export default function ArchivePage() {
           value={regionInput}
           onChange={(e) => setRegionInput(e.target.value)}
         />
-        <select defaultValue="all">
+        <select value={subjectType} onChange={(e) => setSubjectType(e.target.value as BannerSubjectType | 'all')}>
           <option value="all">주체 전체</option>
-          <option>정치인</option>
-          <option>정당</option>
-          <option>시장</option>
-          <option>군수</option>
+          {BANNER_SUBJECT_TYPES.map((type) => (
+            <option key={type} value={type}>{type}</option>
+          ))}
         </select>
         <select defaultValue="recent">
           <option value="recent">최근 관측순</option>

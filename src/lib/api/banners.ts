@@ -6,6 +6,7 @@ export type BannerListParams = {
   to?: string
   hashtag?: string
   region?: string
+  subjectType?: string
   page?: number
   limit?: number
 }
@@ -17,6 +18,7 @@ export async function fetchBanners(params: BannerListParams = {}): Promise<Banne
   if (params.to) sp.set('to', params.to)
   if (params.hashtag) sp.set('hashtag', params.hashtag)
   if (params.region) sp.set('region', params.region)
+  if (params.subjectType) sp.set('subjectType', params.subjectType)
   if (params.page != null) sp.set('page', String(params.page))
   if (params.limit != null) sp.set('limit', String(params.limit))
 

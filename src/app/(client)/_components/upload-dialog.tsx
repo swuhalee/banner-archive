@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import RouteDialog from "./route-dialog";
 import { useUploadBanner } from "@/lib/hooks/banners";
+import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from "@/lib/constants/banner-subject-types";
 
 type UploadDialogProps = {
   closeHref?: string;
@@ -18,7 +19,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [regionText, setRegionText] = useState("");
   const [observedAt, setObservedAt] = useState(new Date().toISOString().slice(0, 10));
-  const [subjectType, setSubjectType] = useState("");
+  const [subjectType, setSubjectType] = useState<BannerSubjectType | "">("");
   const [confirmed1, setConfirmed1] = useState(false);
   const [confirmed2, setConfirmed2] = useState(false);
 
@@ -127,11 +128,11 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
             </label>
             <label className="grid gap-1.5 text-[13px] font-semibold text-[var(--text-muted)]">
               주체 유형
-              <select value={subjectType} onChange={(e) => setSubjectType(e.target.value)}>
+              <select value={subjectType} onChange={(e) => setSubjectType(e.target.value as BannerSubjectType | "")}>
                 <option value="" disabled>선택하세요</option>
-                <option>정치인</option>
-                <option>정당</option>
-                <option>기타</option>
+                {BANNER_SUBJECT_TYPES.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
               </select>
             </label>
             <label className="pt-2 flex items-center gap-1.5 text-[13px] leading-none text-[var(--text-muted)]">

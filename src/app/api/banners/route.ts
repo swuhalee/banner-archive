@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
   const to = searchParams.get('to') || null
   const hashtag = searchParams.get('hashtag') || null
   const region = searchParams.get('region') || null
+  const subjectType = searchParams.get('subjectType')?.trim() || null
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '20', 10)))
   const offset = (page - 1) * limit
@@ -47,6 +48,7 @@ export async function GET(request: NextRequest) {
     toDate ? lte(banners.firstSeenAt, toDate) : undefined,
     hashtag ? sql`${banners.hashtags} @> ARRAY[${hashtag}]::text[]` : undefined,
     region ? ilike(banners.regionText, `%${region}%`) : undefined,
+    subjectType ? eq(banners.subjectType, subjectType) : undefined,
   )
 
   const [data, [{ total }]] = await Promise.all([
