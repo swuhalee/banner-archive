@@ -1,34 +1,39 @@
-import ArchivePhotoCard from "../_components/archive-photo-card";
+'use client'
 
-const byRegion = [
-  {
-    region: "서울",
-    items: [
-      { id: "BA-2201", region: "서울 영등포구", image: "https://picsum.photos/seed/archive-seoul-1/1200/900" },
-      { id: "BA-2200", region: "서울 마포구", image: "https://picsum.photos/seed/archive-seoul-2/1200/1600" },
-    ],
-  },
-  {
-    region: "부산",
-    items: [
-      { id: "BA-2196", region: "부산 남구", image: "https://picsum.photos/seed/archive-busan-1/1200/900" },
-      { id: "BA-2191", region: "부산 수영구", image: "https://picsum.photos/seed/archive-busan-2/1600/900" },
-    ],
-  },
-  {
-    region: "전남",
-    items: [
-      { id: "BA-2189", region: "전남 나주시", image: "https://picsum.photos/seed/archive-jeonnam-1/1200/1600" },
-      { id: "BA-2185", region: "전남 목포시", image: "https://picsum.photos/seed/archive-jeonnam-2/1000/1000" },
-    ],
-  },
-];
+import { useEffect, useState } from 'react'
+import { useBanners } from '@/lib/hooks/banners'
+import type { Banner } from '@/types/banner'
+import ArchivePhotoCard from '../_components/archive-photo-card'
 
 export default function ArchivePage() {
+  const [regionInput, setRegionInput] = useState('')
+  const [region, setRegion] = useState('')
+
+  // 400ms 디바운스
+  useEffect(() => {
+    const t = setTimeout(() => setRegion(regionInput), 400)
+    return () => clearTimeout(t)
+  }, [regionInput])
+
+  const { data, isPending } = useBanners({ region: region || undefined, limit: 60 })
+
+  // 최상위 지역명(첫 단어)으로 그룹핑
+  const grouped = data?.data.reduce<Record<string, Banner[]>>((acc, banner) => {
+    const key = banner.regionText.split(' ')[0]
+    if (!acc[key]) acc[key] = []
+    acc[key].push(banner)
+    return acc
+  }, {})
+
   return (
     <div className="stack-lg">
       <section className="grid grid-cols-[2fr_1fr_1fr] gap-2 pb-[10px] max-[1024px]:grid-cols-1">
-        <input type="text" placeholder="지역 검색" />
+        <input
+          type="text"
+          placeholder="지역 검색"
+          value={regionInput}
+          onChange={(e) => setRegionInput(e.target.value)}
+        />
         <select defaultValue="all">
           <option value="all">주체 전체</option>
           <option>정치인</option>
@@ -43,24 +48,37 @@ export default function ArchivePage() {
         </select>
       </section>
 
-      {byRegion.map((group) => (
-        <section key={group.region} className="stack-md">
-          <div className="grid gap-1">
-            <h2 className="m-0">{group.region}</h2>
-            <p className="m-0 text-[13px] text-[var(--text-muted)]">{group.region} 지역 기록</p>
-          </div>
-          <div className="masonry">
-            {group.items.map((item, idx) => (
-              <ArchivePhotoCard
-                key={item.id}
-                item={item}
-                mediaClass={`media-${((idx + 1) % 4) + 1}`}
-                fromPath="/archive"
-              />
-            ))}
-          </div>
-        </section>
-      ))}
+      {isPending && (
+        <p className="text-[13px] text-[var(--text-muted)]">불러오는 중...</p>
+      )}
+
+      {!isPending && (!grouped || Object.keys(grouped).length === 0) && (
+        <p className="text-[13px] text-[var(--text-muted)]">검색 결과가 없습니다.</p>
+      )}
+
+      {grouped &&
+        Object.entries(grouped).map(([regionKey, items]) => (
+          <section key={regionKey} className="stack-md">
+            <div className="grid gap-1">
+              <h2 className="m-0">{regionKey}</h2>
+              <p className="m-0 text-[13px] text-[var(--text-muted)]">{regionKey} 지역 기록</p>
+            </div>
+            <div className="masonry">
+              {items.map((banner, idx) => (
+                <ArchivePhotoCard
+                  key={banner.id}
+                  item={{
+                    id: banner.id,
+                    region: banner.regionText,
+                    image: banner.images?.[0]?.maskedImageUrl ?? '',
+                  }}
+                  mediaClass={`media-${((idx + 1) % 4) + 1}`}
+                  fromPath="/archive"
+                />
+              ))}
+            </div>
+          </section>
+        ))}
     </div>
-  );
+  )
 }

@@ -1,6 +1,6 @@
 import { db } from '@/server/db'
 import { banners } from '@/server/db/schema'
-import { and, count, desc, eq, gte, ilike, lte, or, sql } from 'drizzle-orm'
+import { and, count, eq, gte, ilike, lte, or, sql } from 'drizzle-orm'
 import { NextRequest, NextResponse } from 'next/server'
 
 // GET /api/banners
@@ -49,13 +49,13 @@ export async function GET(request: NextRequest) {
   )
 
   const [data, [{ total }]] = await Promise.all([
-    db
-      .select()
-      .from(banners)
-      .where(where)
-      .orderBy(desc(banners.firstSeenAt))
-      .limit(limit)
-      .offset(offset),
+    db.query.banners.findMany({
+      where,
+      orderBy: (t, { desc: d }) => [d(t.firstSeenAt)],
+      limit,
+      offset,
+      with: { images: true },
+    }),
     db.select({ total: count() }).from(banners).where(where),
   ])
 
