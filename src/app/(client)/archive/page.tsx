@@ -75,7 +75,7 @@ export default function ArchivePage() {
               <p className="m-0 text-[13px] text-[var(--text-muted)]">{regionKey} 지역 기록</p>
             </div>
             <div className="masonry">
-              {items.map((banner, idx) => (
+              {items.map((banner) => (
                 <ArchivePhotoCard
                   key={banner.id}
                   item={{
@@ -83,7 +83,6 @@ export default function ArchivePage() {
                     region: banner.regionText,
                     image: banner.images?.[0]?.maskedImageUrl ?? '',
                   }}
-                  mediaClass={`media-${((idx + 1) % 4) + 1}`}
                   fromPath="/archive"
                 />
               ))}

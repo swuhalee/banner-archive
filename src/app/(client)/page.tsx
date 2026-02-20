@@ -14,7 +14,7 @@ export default function HomePage() {
           ? Array.from({ length: 8 }, (_, i) => (
               <SkeletonPhotoCard key={i} mediaClass={`media-${(i % 4) + 1}`} />
             ))
-          : data?.data.map((banner, idx) => (
+          : data?.data.map((banner) => (
               <ArchivePhotoCard
                 key={banner.id}
                 item={{
@@ -22,7 +22,6 @@ export default function HomePage() {
                   region: banner.regionText,
                   image: banner.images?.[0]?.maskedImageUrl ?? '',
                 }}
-                mediaClass={`media-${(idx % 4) + 1}`}
                 fromPath="/"
               />
             ))}

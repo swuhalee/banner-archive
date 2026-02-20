@@ -4,6 +4,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  real,
   text,
   timestamp,
   uuid,
@@ -108,6 +109,28 @@ export const appeals = pgTable('appeals', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+export const uploadSources = pgTable('upload_sources', {
+  id: uuid('id').primaryKey().notNull().default(sql`gen_random_uuid()`),
+  sourceImageUrl: text('source_image_url').notNull(),
+  regionText: text('region_text').notNull(),
+  observedAt: timestamp('observed_at', { withTimezone: true }).notNull(),
+  subjectType: text('subject_type'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const bannerSources = pgTable('banner_sources', {
+  id: uuid('id').primaryKey().notNull().default(sql`gen_random_uuid()`),
+  bannerId: uuid('banner_id')
+    .notNull()
+    .references(() => banners.id, { onDelete: 'cascade' }),
+  uploadSourceId: uuid('upload_source_id')
+    .notNull()
+    .references(() => uploadSources.id, { onDelete: 'cascade' }),
+  bbox: jsonb('bbox'),
+  confidence: real('confidence'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 // ─── Relations ────────────────────────────────────────────────────────────────
 
 export const bannersRelations = relations(banners, ({ many }) => ({
@@ -130,5 +153,20 @@ export const bannerObservationsRelations = relations(bannerObservations, ({ one 
   sourceImage: one(images, {
     fields: [bannerObservations.sourceImageId],
     references: [images.id],
+  }),
+}))
+
+export const uploadSourcesRelations = relations(uploadSources, ({ many }) => ({
+  bannerSources: many(bannerSources),
+}))
+
+export const bannerSourcesRelations = relations(bannerSources, ({ one }) => ({
+  banner: one(banners, {
+    fields: [bannerSources.bannerId],
+    references: [banners.id],
+  }),
+  uploadSource: one(uploadSources, {
+    fields: [bannerSources.uploadSourceId],
+    references: [uploadSources.id],
   }),
 }))

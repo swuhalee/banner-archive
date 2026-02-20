@@ -1,4 +1,10 @@
-import type { BannerListResponse, BannerWithImages } from '@/types/banner'
+import type {
+  AnalyzeResponse,
+  BannerListResponse,
+  BannerWithImages,
+  CommitRequest,
+  CommitResponse,
+} from '@/types/banner'
 
 export type BannerListParams = {
   q?: string
@@ -38,6 +44,28 @@ export async function uploadBanner(formData: FormData): Promise<BannerWithImages
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string }
     throw new Error(body.error ?? '업로드에 실패했습니다')
+  }
+  return res.json()
+}
+
+export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse> {
+  const res = await fetch('/api/uploads/analyze', { method: 'POST', body: formData })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? '분석에 실패했습니다')
+  }
+  return res.json()
+}
+
+export async function commitBanner(data: CommitRequest): Promise<CommitResponse> {
+  const res = await fetch('/api/uploads/commit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? '저장에 실패했습니다')
   }
   return res.json()
 }

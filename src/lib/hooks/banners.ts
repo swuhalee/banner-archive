@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  analyzeBanner,
+  commitBanner,
   fetchBanner,
   fetchBanners,
   uploadBanner,
@@ -34,6 +36,20 @@ export function useUploadBanner() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: uploadBanner,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: bannerKeys.lists() })
+    },
+  })
+}
+
+export function useAnalyzeBanner() {
+  return useMutation({ mutationFn: analyzeBanner })
+}
+
+export function useCommitBanner() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: commitBanner,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: bannerKeys.lists() })
     },

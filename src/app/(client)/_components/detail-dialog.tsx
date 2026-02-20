@@ -36,7 +36,6 @@ export default function DetailDialog({ id, closeHref = "/archive", asModal = tru
         {isPending && (
           <div className="grid gap-4 p-4">
             <div className="h-[min(30dvh,320px)] min-h-[180px] w-full animate-pulse rounded-[16px] bg-[var(--surface-alt)]" />
-            <p className="text-[13px] text-[var(--text-muted)]">불러오는 중...</p>
           </div>
         )}
 
@@ -48,11 +47,14 @@ export default function DetailDialog({ id, closeHref = "/archive", asModal = tru
 
         {banner && (
           <>
-            <section className="overflow-hidden rounded-[16px] bg-[var(--surface)]">
-              <div
-                className="media-2 h-[min(30dvh,320px)] min-h-[180px] w-full bg-cover bg-center bg-no-repeat bg-[var(--surface-alt)]"
-                style={imageUrl ? { backgroundImage: `url(${imageUrl})` } : undefined}
-              />
+            <section className="overflow-hidden rounded-[16px] bg-[var(--surface-alt)]">
+              {imageUrl && (
+                <img
+                  src={imageUrl}
+                  alt={banner.regionText}
+                  className="block w-full"
+                />
+              )}
             </section>
 
             <section className="mt-3 grid gap-4 bg-[var(--surface)] p-4">
