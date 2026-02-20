@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   BarChart,
@@ -45,7 +45,7 @@ function ChartSection({ title, children }: { title: string; children: React.Reac
 const fmtCount = (value: number | undefined) => [(value ?? 0).toLocaleString(), '현수막 수'] as [string, string]
 const fmtLabel = (label: unknown) => String(label)
 
-export default function StatsPage() {
+function StatsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -369,5 +369,13 @@ export default function StatsPage() {
         </section>
       )}
     </div>
+  )
+}
+
+export default function StatsPage() {
+  return (
+    <Suspense>
+      <StatsContent />
+    </Suspense>
   )
 }
