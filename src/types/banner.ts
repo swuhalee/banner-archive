@@ -73,7 +73,20 @@ export type CommitRequest = {
   selectedCandidates: CommitCandidate[]
 }
 
+export type RejectedDuplicate = {
+  tempId: string
+  matchedBannerId: string
+  similarityScore: number
+  threshold: number
+}
+
 export type CommitResponse = {
+  savedBannerIds: string[]
+  rejectedDuplicates: RejectedDuplicate[]
+  savedCount: number
+  rejectedCount: number
+  /** @deprecated savedBannerIds 사용 권장 */
   bannerIds: string[]
+  /** @deprecated savedCount 사용 권장 */
   count: number
 }

@@ -7,7 +7,7 @@ import RouteDialog from "./route-dialog";
 import { useAnalyzeBanner, bannerKeys } from "@/lib/hooks/banners";
 import { commitBannerWithProgress } from "@/lib/api/banners";
 import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from "@/lib/constants/banner-subject-types";
-import type { BBox, UploadCandidate } from "@/types/banner";
+import type { BBox, RejectedDuplicate, UploadCandidate } from "@/types/banner";
 
 // ─── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -65,6 +65,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
   const [uploadSourceId, setUploadSourceId] = useState("");
   const [candidates, setCandidates] = useState<EditableCandidate[]>([]);
   const [savedCount, setSavedCount] = useState(0);
+  const [rejectedDuplicates, setRejectedDuplicates] = useState<RejectedDuplicate[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [analyzeProgress, setAnalyzeProgress] = useState(0);
   const [commitProgress, setCommitProgress] = useState(0);
@@ -111,6 +112,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
     setConfirmed2(false);
     setUploadSourceId("");
     setCandidates([]);
+    setRejectedDuplicates([]);
     setErrorMessage(null);
     setAnalyzeProgress(0);
     setCommitProgress(0);
@@ -189,7 +191,8 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
         (percent) => setCommitProgress(percent),
       );
       queryClient.invalidateQueries({ queryKey: bannerKeys.lists() });
-      setSavedCount(data.count);
+      setSavedCount(data.savedCount);
+      setRejectedDuplicates(data.rejectedDuplicates);
       setStep("done");
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "저장에 실패했습니다");
@@ -216,13 +219,25 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
       {/* ── 완료 화면 ─────────────────────────────────────────────────────────── */}
       {step === "done" && (
         <div className="grid gap-4 p-8 text-center">
-          <p className="font-bold">{savedCount}개의 현수막 기록이 완료되었습니다.</p>
-          <p className="text-[13px] text-[var(--text-muted)]">
-            각 현수막이 개별 아카이브에 추가되었습니다.
-          </p>
-          {/* <button type="button" className="btn btn-ghost text-[13px]" onClick={handleReset}>
-            다시 업로드
-          </button> */}
+          {savedCount > 0 ? (
+            <>
+              <p className="font-bold">{savedCount}개의 현수막 기록이 완료되었습니다.</p>
+              <p className="text-[13px] text-[var(--text-muted)]">
+                각 현수막이 개별 아카이브에 추가되었습니다.
+              </p>
+            </>
+          ) : (
+            <p className="font-bold text-(--text-muted)">저장된 현수막이 없습니다.</p>
+          )}
+          {rejectedDuplicates.length > 0 && (
+            <div className="mt-2 grid gap-2 text-left">
+              {rejectedDuplicates.map((r) => (
+                <p key={r.tempId} className="rounded-lg bg-(--surface-alt) px-3 py-2 text-[12px] text-(--text-muted)">
+                  기존 등록 현수막과 {r.similarityScore}% 일치하여 중복 업로드로 저장되지 않았습니다.
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

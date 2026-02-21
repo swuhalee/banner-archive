@@ -1,7 +1,12 @@
 import { db } from '@/server/db'
 import { banners, bannerSources, images, uploadSources } from '@/server/db/schema'
 import { createAdminClient } from '@/utils/supabase/admin'
-import type { BBox, CommitCandidate } from '@/types/banner'
+import type { BBox, CommitCandidate, RejectedDuplicate } from '@/types/banner'
+import {
+  DUPLICATE_THRESHOLD,
+  findBestMatch,
+  type ExistingBanner,
+} from '@/server/dedup/banner-duplicate'
 import sharp from 'sharp'
 import { randomUUID } from 'crypto'
 import { eq } from 'drizzle-orm'
@@ -89,7 +94,6 @@ export async function POST(request: NextRequest) {
   }
 
   const encoder = new TextEncoder()
-  const total = selectedCandidates.length
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -111,7 +115,68 @@ export async function POST(request: NextRequest) {
           return
         }
 
-        // ── 3. 원본 이미지 다운로드 + EXIF 보정 (10%) ─────────────────────────
+        // ── 3. 중복 판정 (8%) ──────────────────────────────────────────────────
+        send({ progress: 8 })
+
+        // 활성 배너 전수 조회 (1차 필터: status='active')
+        const existingBanners: ExistingBanner[] = await db
+          .select({
+            id: banners.id,
+            title: banners.title,
+            hashtags: banners.hashtags,
+            subjectType: banners.subjectType,
+            regionText: banners.regionText,
+            lastSeenAt: banners.lastSeenAt,
+          })
+          .from(banners)
+          .where(eq(banners.status, 'active'))
+
+        const observedAt = uploadSource.observedAt
+        const regionText = uploadSource.regionText
+
+        console.log(`[dedup] 활성 배너 ${existingBanners.length}건 조회됨 (임계치: ${DUPLICATE_THRESHOLD}%)`)
+
+        const rejectedDuplicates: RejectedDuplicate[] = []
+        const nonDuplicates: CommitCandidate[] = []
+
+        for (const candidate of selectedCandidates) {
+          const best = findBestMatch(candidate, regionText, observedAt, existingBanners)
+          console.log(
+            `[dedup] 후보 "${candidate.title}" → 최고 유사도: ${best ? `${best.similarityScore.toFixed(1)}% (bannerId: ${best.matchedBannerId})` : '없음 (기존 배너 0건)'}`,
+          )
+          if (best && best.similarityScore >= DUPLICATE_THRESHOLD) {
+            rejectedDuplicates.push({
+              tempId: candidate.tempId,
+              matchedBannerId: best.matchedBannerId,
+              similarityScore: Math.round(best.similarityScore),
+              threshold: DUPLICATE_THRESHOLD,
+            })
+          } else {
+            nonDuplicates.push(candidate)
+          }
+        }
+
+        // 모두 중복이면 이미지 처리 없이 즉시 반환
+        if (nonDuplicates.length === 0) {
+          send({
+            progress: 100,
+            done: true,
+            data: {
+              savedBannerIds: [],
+              rejectedDuplicates,
+              savedCount: 0,
+              rejectedCount: rejectedDuplicates.length,
+              bannerIds: [],
+              count: 0,
+            },
+          })
+          controller.close()
+          return
+        }
+
+        const total = nonDuplicates.length
+
+        // ── 4. 원본 이미지 다운로드 + EXIF 보정 (10%) ─────────────────────────
         send({ progress: 10 })
         const bucket = process.env.SUPABASE_STORAGE_BUCKET!
         const supabase = createAdminClient()
@@ -130,7 +195,7 @@ export async function POST(request: NextRequest) {
         const rotatedBuffer = await sharp(sourceBuffer).rotate().toBuffer()
         send({ progress: 20 })
 
-        // ── 4. 각 후보별 크롭 + 압축 + Storage 업로드 (20% → 88%) ────────────
+        // ── 5. 각 후보별 크롭 + 압축 + Storage 업로드 (20% → 88%) ────────────
         type CropUploadResult = {
           candidate: CommitCandidate
           thumbPath: string
@@ -139,7 +204,7 @@ export async function POST(request: NextRequest) {
 
         let completed = 0
         const cropResults: CropUploadResult[] = await Promise.all(
-          selectedCandidates.map(async (candidate) => {
+          nonDuplicates.map(async (candidate) => {
             const cropBuffer = await cropImage(rotatedBuffer, candidate.bbox)
 
             const [thumbBuffer, detailBuffer] = await Promise.all([
@@ -173,9 +238,8 @@ export async function POST(request: NextRequest) {
           }),
         )
 
-        // ── 5. DB 트랜잭션으로 배너 + 이미지 + banner_sources 일괄 삽입 (92%) ─
+        // ── 6. DB 트랜잭션으로 배너 + 이미지 + banner_sources 일괄 삽입 (92%) ─
         send({ progress: 92 })
-        const observedDate = uploadSource.observedAt
 
         const insertedBannerIds = await db.transaction(async (tx) => {
           const ids: string[] = []
@@ -188,8 +252,8 @@ export async function POST(request: NextRequest) {
                 hashtags: candidate.hashtags,
                 subjectType: candidate.subjectType ?? uploadSource.subjectType,
                 regionText: uploadSource.regionText,
-                firstSeenAt: observedDate,
-                lastSeenAt: observedDate,
+                firstSeenAt: observedAt,
+                lastSeenAt: observedAt,
               })
               .returning()
 
@@ -220,7 +284,14 @@ export async function POST(request: NextRequest) {
         send({
           progress: 100,
           done: true,
-          data: { bannerIds: insertedBannerIds, count: insertedBannerIds.length },
+          data: {
+            savedBannerIds: insertedBannerIds,
+            rejectedDuplicates,
+            savedCount: insertedBannerIds.length,
+            rejectedCount: rejectedDuplicates.length,
+            bannerIds: insertedBannerIds,
+            count: insertedBannerIds.length,
+          },
         })
         controller.close()
       } catch (err) {
