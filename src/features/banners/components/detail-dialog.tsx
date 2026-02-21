@@ -6,8 +6,8 @@ import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined
 import TodayOutlinedIcon from "@mui/icons-material/TodayOutlined";
 import TagOutlinedIcon from "@mui/icons-material/TagOutlined";
 import ReportDialog from "./report-dialog";
-import RouteDialog from "./route-dialog";
-import { useBanner } from "@/lib/hooks/banners";
+import RouteDialog from "@/components/ui/route-dialog";
+import { useBanner } from "@/features/banners/queries/banner-queries";
 
 type DetailDialogProps = {
   id: string;

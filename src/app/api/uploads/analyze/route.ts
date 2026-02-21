@@ -1,7 +1,7 @@
 import { db } from '@/server/db'
 import { uploadSources } from '@/server/db/schema'
 import { createAdminClient } from '@/utils/supabase/admin'
-import type { BBox, UploadCandidate } from '@/types/banner'
+import type { BBox, UploadCandidate } from '@/features/banners/types/banner'
 import OpenAI from 'openai'
 import sharp from 'sharp'
 import { randomUUID } from 'crypto'

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import UploadNavLink from "./_components/upload-nav-link";
+import UploadNavLink from "@/features/uploads/components/upload-nav-link";
 
 export default function ClientLayout({
   children,

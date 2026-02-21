@@ -3,11 +3,10 @@
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDaumPostcodePopup } from "react-daum-postcode";
-import RouteDialog from "./route-dialog";
-import { useAnalyzeBanner, bannerKeys } from "@/lib/hooks/banners";
-import { commitBannerWithProgress } from "@/lib/api/banners";
+import RouteDialog from "@/components/ui/route-dialog";
+import { useAnalyzeBanner, bannerKeys, commitBannerWithProgress } from "@/features/banners/queries/banner-queries";
 import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from "@/lib/constants/banner-subject-types";
-import type { BBox, RejectedDuplicate, UploadCandidate } from "@/types/banner";
+import type { BBox, RejectedDuplicate, UploadCandidate } from "@/features/banners/types/banner";
 
 // ─── 타입 ─────────────────────────────────────────────────────────────────────
 

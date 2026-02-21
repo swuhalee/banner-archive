@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { sanitizeReturnPath } from "../_lib/return-path";
+import { sanitizeReturnPath } from "@/lib/return-path";
 
 export default function UploadNavLink() {
   const pathname = usePathname();

@@ -1,11 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { useBanners } from '@/lib/hooks/banners'
+import { useBanners } from '@/features/banners/queries/banner-queries'
 import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from '@/lib/constants/banner-subject-types'
-import type { Banner } from '@/types/banner'
-import ArchivePhotoCard from '../_components/archive-photo-card'
-import { SkeletonPhotoCard } from '../_components/skeleton'
+import type { Banner } from '@/features/banners/types/banner'
+import ArchivePhotoCard from '@/features/banners/components/archive-photo-card'
+import { SkeletonPhotoCard } from '@/features/banners/components/skeleton-photo-card'
 
 export default function ArchivePage() {
   const [regionInput, setRegionInput] = useState('')

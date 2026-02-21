@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import DetailDialog from "../_components/detail-dialog";
+import DetailDialog from "@/features/banners/components/detail-dialog";
 
 type Props = {
   searchParams: Promise<{ id?: string }>;

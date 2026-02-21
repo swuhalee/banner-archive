@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { sanitizeReturnPath } from "../_lib/return-path";
+import { sanitizeReturnPath } from "@/lib/return-path";
 
 type ArchiveItem = {
   id: string;

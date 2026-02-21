@@ -1,8 +1,8 @@
 'use client'
 
-import { useBanners } from '@/lib/hooks/banners'
-import ArchivePhotoCard from './_components/archive-photo-card'
-import { SkeletonPhotoCard } from './_components/skeleton'
+import { useBanners } from '@/features/banners/queries/banner-queries'
+import ArchivePhotoCard from '@/features/banners/components/archive-photo-card'
+import { SkeletonPhotoCard } from '@/features/banners/components/skeleton-photo-card'
 
 export default function HomePage() {
   const { data, isPending } = useBanners({ limit: 20 })

@@ -14,10 +14,9 @@ import {
   PieChart,
   Pie,
 } from 'recharts'
-import { useStatsOverview } from '@/lib/hooks/stats'
+import { useStatsOverview, type StatsParams } from '@/features/stats/queries/stats-queries'
 import { BANNER_SUBJECT_TYPES } from '@/lib/constants/banner-subject-types'
-import type { StatsParams } from '@/lib/api/stats'
-import { SkeletonSummaryCard, SkeletonChartSection } from '../_components/skeleton'
+import { SkeletonSummaryCard, SkeletonChartSection } from '@/features/stats/components/skeleton-stats'
 
 const CHART_COLORS = ['#4f8ef7', '#f76d4f', '#4fc47a', '#f7c44f', '#a04ff7', '#4ff7e8']
 

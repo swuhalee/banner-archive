@@ -1,6 +1,6 @@
 "use client";
 
-import { submitAppeal, type AppealReasonType } from "@/lib/api/appeals";
+import { submitAppeal, type AppealReasonType } from "@/features/banners/queries/appeals-queries";
 import { Dialog, DialogPanel } from "@headlessui/react";
 import { useState } from "react";
 
