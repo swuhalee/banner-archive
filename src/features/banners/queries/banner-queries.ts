@@ -1,79 +1,26 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { fetchBanners, type BannerListParams } from '@/features/banners/actions/fetch-banners'
+import { fetchBanner } from '@/features/banners/actions/fetch-banner'
+import { analyzeBanner } from '@/features/uploads/actions/analyze-banner'
 import type {
-  AnalyzeResponse,
   BannerListResponse,
   BannerWithImages,
   CommitRequest,
   CommitResponse,
 } from '@/features/banners/types/banner'
 
-// ─── 파라미터 타입 ─────────────────────────────────────────────────────────────
+export type { BannerListParams }
 
-export type BannerListParams = {
-  q?: string
-  from?: string
-  to?: string
-  hashtag?: string
-  region?: string
-  subjectType?: string
-  page?: number
-  limit?: number
+// ─── React Query 키 팩토리 ─────────────────────────────────────────────────────
+
+export const bannerKeys = {
+  all: ['banners'] as const,
+  lists: () => ['banners', 'list'] as const,
+  list: (params: BannerListParams) => ['banners', 'list', params] as const,
+  detail: (id: string) => ['banners', 'detail', id] as const,
 }
 
-// ─── API 함수 ──────────────────────────────────────────────────────────────────
-
-export async function fetchBanners(params: BannerListParams = {}): Promise<BannerListResponse> {
-  const sp = new URLSearchParams()
-  if (params.q) sp.set('q', params.q)
-  if (params.from) sp.set('from', params.from)
-  if (params.to) sp.set('to', params.to)
-  if (params.hashtag) sp.set('hashtag', params.hashtag)
-  if (params.region) sp.set('region', params.region)
-  if (params.subjectType) sp.set('subjectType', params.subjectType)
-  if (params.page != null) sp.set('page', String(params.page))
-  if (params.limit != null) sp.set('limit', String(params.limit))
-
-  const res = await fetch(`/api/banners?${sp}`)
-  if (!res.ok) throw new Error('배너 목록을 불러오지 못했습니다')
-  return res.json()
-}
-
-export async function fetchBanner(id: string): Promise<BannerWithImages> {
-  const res = await fetch(`/api/banners/${id}`)
-  if (!res.ok) throw new Error('배너를 불러오지 못했습니다')
-  return res.json()
-}
-
-export async function uploadBanner(formData: FormData): Promise<BannerWithImages> {
-  const res = await fetch('/api/uploads', { method: 'POST', body: formData })
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string }
-    throw new Error(body.error ?? '업로드에 실패했습니다')
-  }
-  return res.json()
-}
-
-export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse> {
-  const res = await fetch('/api/uploads/analyze', { method: 'POST', body: formData })
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string }
-    throw new Error(body.error ?? '분석에 실패했습니다')
-  }
-  return res.json()
-}
-
-export async function commitBanner(data: CommitRequest): Promise<CommitResponse> {
-  const res = await fetch('/api/uploads/commit', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string }
-    throw new Error(body.error ?? '저장에 실패했습니다')
-  }
-  return res.json()
-}
+// ─── commit (SSE 스트리밍) — API Route 유지 ───────────────────────────────────
 
 export async function commitBannerWithProgress(
   data: CommitRequest,
@@ -114,15 +61,6 @@ export async function commitBannerWithProgress(
   throw new Error('스트림이 예상치 않게 종료되었습니다')
 }
 
-// ─── React Query 키 팩토리 ─────────────────────────────────────────────────────
-
-export const bannerKeys = {
-  all: ['banners'] as const,
-  lists: () => ['banners', 'list'] as const,
-  list: (params: BannerListParams) => ['banners', 'list', params] as const,
-  detail: (id: string) => ['banners', 'detail', id] as const,
-}
-
 // ─── React Query 훅 ───────────────────────────────────────────────────────────
 
 export function useBanners(params: BannerListParams = {}) {
@@ -142,26 +80,9 @@ export function useBanner(id: string) {
   })
 }
 
-export function useUploadBanner() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: uploadBanner,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: bannerKeys.lists() })
-    },
-  })
-}
-
 export function useAnalyzeBanner() {
   return useMutation({ mutationFn: analyzeBanner })
 }
 
-export function useCommitBanner() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: commitBanner,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: bannerKeys.lists() })
-    },
-  })
-}
+// 타입 재사용을 위한 re-export
+export type { BannerListResponse, BannerWithImages, CommitRequest, CommitResponse }
