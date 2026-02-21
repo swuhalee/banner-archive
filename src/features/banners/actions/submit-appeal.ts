@@ -5,11 +5,8 @@ import { appeals, banners } from '@/server/db/schema'
 import { eq } from 'drizzle-orm'
 import {
   submitAppealInputSchema,
-  type AppealReasonType,
   type SubmitAppealInput,
 } from '@/features/banners/schemas/banner-schema'
-
-export type { AppealReasonType, SubmitAppealInput }
 
 export async function submitAppeal(input: SubmitAppealInput) {
   const { bannerId, reasonType, reasonDetail } = submitAppealInputSchema.parse(input)

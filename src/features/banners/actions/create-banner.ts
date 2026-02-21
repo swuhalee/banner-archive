@@ -7,8 +7,6 @@ import {
   type CreateBannerInput,
 } from '@/features/banners/schemas/banner-schema'
 
-export type { CreateBannerInput }
-
 export async function createBanner(input: CreateBannerInput) {
   const { title, hashtags, subjectType, regionText, firstSeenAt, lastSeenAt } =
     createBannerInputSchema.parse(input)

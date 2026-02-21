@@ -4,20 +4,7 @@ import { db } from '@/server/db'
 import { banners } from '@/server/db/schema'
 import { and, count, countDistinct, eq, gte, ilike, lte, sql } from 'drizzle-orm'
 import { statsParamsSchema, type StatsParams } from '@/features/stats/schemas/stats-schema'
-
-export type { StatsParams }
-
-export type StatsOverviewResponse = {
-  summary: {
-    totalBanners: number
-    totalRegions: number
-    totalSubjects: number
-  }
-  byRegion: Array<{ region: string; count: number }>
-  bySubjectType: Array<{ subjectType: string; count: number }>
-  topHashtags: Array<{ tag: string; count: number; ratio: number }>
-  timeSeries: Array<{ bucket: string; count: number }>
-}
+import type { StatsOverviewResponse } from '@/features/stats/types/stats'
 
 export async function fetchStatsOverview(params: StatsParams = {}): Promise<StatsOverviewResponse> {
   const parsedParams = statsParamsSchema.parse(params)

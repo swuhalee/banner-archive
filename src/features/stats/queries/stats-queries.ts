@@ -1,9 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import {
-  fetchStatsOverview,
-  type StatsParams,
-  type StatsOverviewResponse,
-} from '@/features/stats/actions/fetch-stats-overview'
+import { fetchStatsOverview } from '@/features/stats/actions/fetch-stats-overview'
+import type { StatsParams } from '@/features/stats/schemas/stats-schema'
+import type { StatsOverviewResponse } from '@/features/stats/types/stats'
 
 export type { StatsParams, StatsOverviewResponse }
 

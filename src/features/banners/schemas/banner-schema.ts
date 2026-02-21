@@ -61,7 +61,7 @@ export const submitAppealInputSchema = z.object({
   reasonDetail: optionalTrimmedStringSchema.optional(),
 })
 
-export type BannerListParams = z.infer<typeof bannerListParamsSchema>
-export type CreateBannerInput = z.infer<typeof createBannerInputSchema>
-export type AppealReasonType = z.infer<typeof appealReasonTypeSchema>
-export type SubmitAppealInput = z.infer<typeof submitAppealInputSchema>
+export type BannerListParams = z.input<typeof bannerListParamsSchema>
+export type CreateBannerInput = z.input<typeof createBannerInputSchema>
+export type AppealReasonType = z.input<typeof appealReasonTypeSchema>
+export type SubmitAppealInput = z.input<typeof submitAppealInputSchema>

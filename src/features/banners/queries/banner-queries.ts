@@ -1,15 +1,14 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { fetchBanners, type BannerListParams } from '@/features/banners/actions/fetch-banners'
+import { fetchBanners } from '@/features/banners/actions/fetch-banners'
 import { fetchBanner } from '@/features/banners/actions/fetch-banner'
 import { analyzeBanner } from '@/features/uploads/actions/analyze-banner'
+import type { BannerListParams } from '@/features/banners/schemas/banner-schema'
 import type {
   BannerListResponse,
   BannerWithImages,
   CommitRequest,
   CommitResponse,
 } from '@/features/banners/types/banner'
-
-export type { BannerListParams }
 
 // ─── React Query 키 팩토리 ─────────────────────────────────────────────────────
 

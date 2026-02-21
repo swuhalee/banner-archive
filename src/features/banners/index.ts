@@ -1,7 +1,7 @@
-export { createBanner, type CreateBannerInput } from './actions/create-banner'
+export { createBanner } from './actions/create-banner'
 export { fetchBanner } from './actions/fetch-banner'
-export { fetchBanners, type BannerListParams } from './actions/fetch-banners'
-export { submitAppeal, type AppealReasonType, type SubmitAppealInput } from './actions/submit-appeal'
+export { fetchBanners } from './actions/fetch-banners'
+export { submitAppeal } from './actions/submit-appeal'
 
 export { default as ArchivePhotoCard } from './components/archive-photo-card'
 export { default as DetailDialog } from './components/detail-dialog'
@@ -28,6 +28,13 @@ export {
   bannerListParamsSchema,
   createBannerInputSchema,
   submitAppealInputSchema,
+} from './schemas/banner-schema'
+
+export type {
+  AppealReasonType,
+  BannerListParams,
+  CreateBannerInput,
+  SubmitAppealInput,
 } from './schemas/banner-schema'
 
 export type {

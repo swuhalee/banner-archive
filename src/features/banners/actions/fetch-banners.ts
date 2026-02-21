@@ -10,8 +10,6 @@ import {
   type BannerListParams,
 } from '@/features/banners/schemas/banner-schema'
 
-export type { BannerListParams }
-
 export async function fetchBanners(params: BannerListParams = {}): Promise<BannerListResponse> {
   const parsedParams = bannerListParamsSchema.parse(params)
   const q = parsedParams.q || null
