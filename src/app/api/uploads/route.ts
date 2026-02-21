@@ -1,6 +1,6 @@
 import { db } from '@/server/db'
 import { banners, images } from '@/server/db/schema'
-import { resolveStorageUrl } from '@/utils/supabase/storage'
+import { resolveStorageUrl } from '@/server/lib/supabase/storage'
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 

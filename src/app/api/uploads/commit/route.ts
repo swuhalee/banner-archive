@@ -1,6 +1,6 @@
 import { db } from '@/server/db'
 import { banners, bannerSources, images, uploadSources } from '@/server/db/schema'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createAdminClient } from '@/server/lib/supabase/admin'
 import type { BBox, CommitCandidate, RejectedDuplicate } from '@/features/banners/types/banner'
 import {
   DUPLICATE_THRESHOLD,

@@ -1,6 +1,6 @@
 import { db } from '@/server/db'
 import { uploadSources } from '@/server/db/schema'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createAdminClient } from '@/server/lib/supabase/admin'
 import type { BBox, UploadCandidate } from '@/features/banners/types/banner'
 import OpenAI from 'openai'
 import sharp from 'sharp'
