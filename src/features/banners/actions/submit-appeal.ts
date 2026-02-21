@@ -3,20 +3,16 @@
 import { db } from '@/server/db'
 import { appeals, banners } from '@/server/db/schema'
 import { eq } from 'drizzle-orm'
+import {
+  submitAppealInputSchema,
+  type AppealReasonType,
+  type SubmitAppealInput,
+} from '@/features/banners/schemas/banner-schema'
 
-const VALID_REASON_TYPES = ['privacy', 'portrait', 'false_info', 'other'] as const
-export type AppealReasonType = (typeof VALID_REASON_TYPES)[number]
+export type { AppealReasonType, SubmitAppealInput }
 
-export type SubmitAppealInput = {
-  bannerId: string
-  reasonType: AppealReasonType
-  reasonDetail?: string
-}
-
-export async function submitAppeal({ bannerId, reasonType, reasonDetail }: SubmitAppealInput) {
-  if (!VALID_REASON_TYPES.includes(reasonType)) {
-    throw new Error(`reasonType은 ${VALID_REASON_TYPES.join(', ')} 중 하나여야 합니다`)
-  }
+export async function submitAppeal(input: SubmitAppealInput) {
+  const { bannerId, reasonType, reasonDetail } = submitAppealInputSchema.parse(input)
 
   const banner = await db.query.banners.findFirst({
     where: eq(banners.id, bannerId),

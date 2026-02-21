@@ -3,15 +3,9 @@
 import { db } from '@/server/db'
 import { banners } from '@/server/db/schema'
 import { and, count, countDistinct, eq, gte, ilike, lte, sql } from 'drizzle-orm'
+import { statsParamsSchema, type StatsParams } from '@/features/stats/schemas/stats-schema'
 
-export type StatsParams = {
-  from?: string
-  to?: string
-  region?: string
-  subjectType?: string
-  hashtag?: string
-  limit?: number
-}
+export type { StatsParams }
 
 export type StatsOverviewResponse = {
   summary: {
@@ -26,22 +20,16 @@ export type StatsOverviewResponse = {
 }
 
 export async function fetchStatsOverview(params: StatsParams = {}): Promise<StatsOverviewResponse> {
-  const from = params.from || null
-  const to = params.to || null
-  const region = params.region || null
-  const subjectType = params.subjectType || null
-  const hashtag = params.hashtag || null
-  const limit = Math.min(50, Math.max(1, params.limit ?? 10))
+  const parsedParams = statsParamsSchema.parse(params)
+  const from = parsedParams.from || null
+  const to = parsedParams.to || null
+  const region = parsedParams.region || null
+  const subjectType = parsedParams.subjectType || null
+  const hashtag = parsedParams.hashtag || null
+  const limit = parsedParams.limit
 
   const fromDate = from ? new Date(from) : null
   const toDate = to ? new Date(to) : null
-
-  if (fromDate && isNaN(fromDate.getTime())) {
-    throw new Error('from 날짜 형식이 올바르지 않습니다')
-  }
-  if (toDate && isNaN(toDate.getTime())) {
-    throw new Error('to 날짜 형식이 올바르지 않습니다')
-  }
 
   const where = and(
     eq(banners.status, 'active'),

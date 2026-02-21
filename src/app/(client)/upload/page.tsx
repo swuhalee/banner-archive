@@ -1,4 +1,4 @@
-import UploadDialog from "@/features/uploads/components/upload-dialog";
+import { UploadDialog } from "@/features/uploads";
 
 export default function UploadPage() {
   return <UploadDialog asModal={false} />;

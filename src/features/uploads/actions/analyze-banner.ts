@@ -4,12 +4,13 @@ import { db } from '@/server/db'
 import { uploadSources } from '@/server/db/schema'
 import { createAdminClient } from '@/server/lib/supabase/admin'
 import type { BBox, UploadCandidate, AnalyzeResponse } from '@/features/banners/types/banner'
+import {
+  analyzeBannerInputSchema,
+  detectedBannerListSchema,
+} from '@/features/uploads/schemas/upload-schema'
 import OpenAI from 'openai'
 import sharp from 'sharp'
 import { randomUUID } from 'crypto'
-
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
 
 async function compressSource(input: Buffer): Promise<Buffer> {
   return sharp(input)
@@ -76,13 +77,11 @@ async function detectBanners(base64: string, mimeType: string): Promise<MultiBan
   const raw = completion.choices[0]?.message?.content ?? '{}'
 
   try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>
-    const bannerList = Array.isArray(parsed.banners) ? parsed.banners : []
+    const parsed = detectedBannerListSchema.parse(JSON.parse(raw))
+    const bannerList = parsed.banners
 
-    const candidates: UploadCandidate[] = bannerList
-      .filter((b): b is Record<string, unknown> => typeof b === 'object' && b !== null)
-      .map((b, idx) => {
-        const bbox = (b.bbox as Record<string, unknown>) ?? {}
+    const candidates: UploadCandidate[] = bannerList.map((b, idx) => {
+      const bbox = b.bbox ?? {}
         const parsedBbox: BBox = {
           x: clamp(Number(bbox.x) || 0),
           y: clamp(Number(bbox.y) || 0),
@@ -90,17 +89,15 @@ async function detectBanners(base64: string, mimeType: string): Promise<MultiBan
           height: clamp(Number(bbox.height) || 1),
         }
 
-        return {
-          tempId: typeof b.tempId === 'string' ? b.tempId : `banner_${idx}`,
-          title: typeof b.title === 'string' ? b.title : null,
-          hashtags: Array.isArray(b.hashtags)
-            ? (b.hashtags as unknown[]).filter((h) => typeof h === 'string').slice(0, 12) as string[]
-            : [],
-          subjectType: typeof b.subjectType === 'string' ? b.subjectType : null,
-          bbox: parsedBbox,
-          confidence: clamp(Number(b.confidence) || 0.5),
-        }
-      })
+      return {
+        tempId: typeof b.tempId === 'string' && b.tempId.length > 0 ? b.tempId : `banner_${idx}`,
+        title: typeof b.title === 'string' ? b.title : null,
+        hashtags: (b.hashtags ?? []).map((h) => h.trim()).filter((h) => h.length > 0).slice(0, 12),
+        subjectType: typeof b.subjectType === 'string' ? b.subjectType : null,
+        bbox: parsedBbox,
+        confidence: clamp(Number(b.confidence) || 0.5),
+      }
+    })
 
     return { candidates }
   } catch {
@@ -118,31 +115,14 @@ function clamp(v: number, min = 0, max = 1): number {
 //   observedAt   string   목격 날짜 ISO 8601 (필수)
 //   subjectType  string   주체 유형 (선택)
 export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse> {
-  const imageFile = formData.get('image')
-  const regionText = (formData.get('regionText') as string | null)?.trim()
-  const observedAt = formData.get('observedAt') as string | null
-  const subjectType = (formData.get('subjectType') as string | null)?.trim() || null
-
-  if (!(imageFile instanceof File)) {
-    throw new Error('image 파일이 필요합니다')
-  }
-  if (!regionText) {
-    throw new Error('regionText는 필수입니다')
-  }
-  if (!observedAt) {
-    throw new Error('observedAt은 필수입니다')
-  }
-  if (!ALLOWED_MIME_TYPES.includes(imageFile.type)) {
-    throw new Error('JPG, PNG, WebP 이미지만 업로드 가능합니다')
-  }
-  if (imageFile.size > MAX_FILE_SIZE) {
-    throw new Error('이미지 크기는 20MB를 초과할 수 없습니다')
-  }
+  const { image: imageFile, regionText, observedAt, subjectType } = analyzeBannerInputSchema.parse({
+    image: formData.get('image'),
+    regionText: formData.get('regionText'),
+    observedAt: formData.get('observedAt'),
+    subjectType: formData.get('subjectType'),
+  })
 
   const observedDate = new Date(observedAt)
-  if (isNaN(observedDate.getTime())) {
-    throw new Error('observedAt 날짜 형식이 올바르지 않습니다 (ISO 8601)')
-  }
 
   const originalBuffer = Buffer.from(await imageFile.arrayBuffer())
   const base64 = originalBuffer.toString('base64')

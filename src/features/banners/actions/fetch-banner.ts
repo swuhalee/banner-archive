@@ -5,10 +5,13 @@ import { banners } from '@/server/db/schema'
 import { resolveStorageUrl } from '@/server/lib/supabase/storage'
 import { eq } from 'drizzle-orm'
 import type { BannerWithImages } from '@/features/banners/types/banner'
+import { bannerIdSchema } from '@/features/banners/schemas/banner-schema'
 
 export async function fetchBanner(id: string): Promise<BannerWithImages> {
+  const parsedId = bannerIdSchema.parse(id)
+
   const banner = await db.query.banners.findFirst({
-    where: eq(banners.id, id),
+    where: eq(banners.id, parsedId),
     with: { images: true },
   })
 

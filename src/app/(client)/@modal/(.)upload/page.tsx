@@ -1,4 +1,4 @@
-import UploadDialog from "@/features/uploads/components/upload-dialog";
+import { UploadDialog } from "@/features/uploads";
 import { sanitizeReturnPath } from "@/lib/return-path";
 
 type Props = {
