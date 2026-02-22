@@ -8,7 +8,7 @@ import {
   analyzeBannerInputSchema,
   detectedBannerListSchema,
 } from '@/features/uploads/schemas/upload-schema'
-import OpenAI from 'openai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import sharp from 'sharp'
 import { randomUUID } from 'crypto'
 
@@ -25,27 +25,21 @@ type MultiBannerAnalysis = {
 }
 
 async function detectBanners(base64: string, mimeType: string): Promise<MultiBannerAnalysis> {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+  const model = genAI.getGenerativeModel({
+    model: process.env.GEMINI_MODEL ?? 'gemini-2.0-flash',
+    generationConfig: {
+      responseMimeType: 'application/json',
+    },
+    systemInstruction:
+      '당신은 사진 속의 현수막을 감지하고 분석하는 전문 AI입니다. 이미지에서 보이는 모든 현수막을 찾아 위치와 내용을 추출합니다.',
+  })
 
-  const completion = await openai.chat.completions.create({
-    model: process.env.OPENAI_BANNER_TITLE_MODEL!,
-    response_format: { type: 'json_object' },
-    messages: [
-      {
-        role: 'system',
-        content:
-          '당신은 사진 속의 현수막을 감지하고 분석하는 전문 AI입니다. 이미지에서 보이는 모든 현수막을 찾아 위치와 내용을 추출합니다.',
-      },
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'image_url',
-            image_url: { url: `data:${mimeType};base64,${base64}` },
-          },
-          {
-            type: 'text',
-            text: `이 사진에서 보이는 모든 현수막을 감지하여 아래 JSON 형식으로만 응답하세요.
+  const result = await model.generateContent([
+    {
+      inlineData: { data: base64, mimeType },
+    },
+    `이 사진에서 보이는 모든 현수막을 감지하여 아래 JSON 형식으로만 응답하세요.
 
 {
   "banners": [
@@ -68,13 +62,9 @@ async function detectBanners(base64: string, mimeType: string): Promise<MultiBan
 - subjectType: "정치인", "정당", "기타", null 중 하나
 - confidence: 현수막 감지 신뢰도 (0.0~1.0)
 - 현수막이 없으면: { "banners": [] }`,
-          },
-        ],
-      },
-    ],
-  })
+  ])
 
-  const raw = completion.choices[0]?.message?.content ?? '{}'
+  const raw = result.response.text()
 
   try {
     const parsed = detectedBannerListSchema.parse(JSON.parse(raw))
