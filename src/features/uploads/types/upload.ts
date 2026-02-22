@@ -14,9 +14,15 @@ export type UploadCandidate = {
   confidence: number
 }
 
+export type PrivacyRegion = {
+  type: 'face' | 'licensePlate'
+  bbox: BBox
+}
+
 export type AnalyzeResponse = {
   uploadSourceId: string
   candidates: UploadCandidate[]
+  privacyRegions: PrivacyRegion[]
 }
 
 export type CommitCandidate = {

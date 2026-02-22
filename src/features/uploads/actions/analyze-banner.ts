@@ -3,7 +3,7 @@
 import { db } from '@/server/db'
 import { uploadSources } from '@/server/db/schema'
 import { createAdminClient } from '@/server/lib/supabase/admin'
-import type { BBox, UploadCandidate, AnalyzeResponse } from '@/features/uploads/types/upload'
+import type { BBox, UploadCandidate, AnalyzeResponse, PrivacyRegion } from '@/features/uploads/types/upload'
 import {
   analyzeBannerInputSchema,
   detectedBannerListSchema,
@@ -22,6 +22,7 @@ async function compressSource(input: Buffer): Promise<Buffer> {
 
 type MultiBannerAnalysis = {
   candidates: UploadCandidate[]
+  privacyRegions: PrivacyRegion[]
 }
 
 async function detectBanners(base64: string, mimeType: string): Promise<MultiBannerAnalysis> {
@@ -32,14 +33,14 @@ async function detectBanners(base64: string, mimeType: string): Promise<MultiBan
       responseMimeType: 'application/json',
     },
     systemInstruction:
-      '당신은 사진 속의 현수막을 감지하고 분석하는 전문 AI입니다. 이미지에서 보이는 모든 현수막을 찾아 위치와 내용을 추출합니다.',
+      '당신은 사진 속의 현수막을 감지하고 분석하는 전문 AI입니다. 이미지에서 보이는 모든 현수막을 찾아 위치와 내용을 추출하고, 개인정보 보호를 위해 사람 얼굴과 한국 차량 번호판도 함께 감지합니다.',
   })
 
   const result = await model.generateContent([
     {
       inlineData: { data: base64, mimeType },
     },
-    `이 사진에서 보이는 모든 현수막을 감지하여 아래 JSON 형식으로만 응답하세요.
+    `이 사진에서 보이는 모든 현수막을 감지하고, 개인정보 보호 대상(얼굴·번호판)도 감지하여 아래 JSON 형식으로만 응답하세요.
 
 {
   "banners": [
@@ -51,17 +52,28 @@ async function detectBanners(base64: string, mimeType: string): Promise<MultiBan
       "bbox": { "x": 0.10, "y": 0.05, "width": 0.80, "height": 0.60 },
       "confidence": 0.95
     }
+  ],
+  "privacyRegions": [
+    {
+      "type": "face",
+      "bbox": { "x": 0.10, "y": 0.05, "width": 0.08, "height": 0.12 }
+    },
+    {
+      "type": "licensePlate",
+      "bbox": { "x": 0.45, "y": 0.70, "width": 0.15, "height": 0.05 }
+    }
   ]
 }
 
 규칙:
-- bbox는 이미지 전체 크기 대비 비율(0.0~1.0)로 표현. x·y는 현수막 좌상단, width·height는 크기
+- bbox는 이미지 전체 크기 대비 비율(0.0~1.0)로 표현. x·y는 좌상단, width·height는 크기
 - tempId는 "banner_0", "banner_1" 순으로 부여
 - title: 현수막에서 가장 중심이 되는 한 문장 또는 슬로건
 - hashtags: 주제, 주체, 요구사항, 장소를 나타내는 한국어 키워드 최대 12개, # 기호 없이
 - subjectType: "정치인", "정당", "기타", null 중 하나
 - confidence: 현수막 감지 신뢰도 (0.0~1.0)
-- 현수막이 없으면: { "banners": [] }`,
+- privacyRegions.type: "face" (사람 얼굴) 또는 "licensePlate" (한국 차량 번호판)
+- 현수막이 없으면: { "banners": [], "privacyRegions": [] }`,
   ])
 
   const raw = result.response.text()
@@ -89,9 +101,19 @@ async function detectBanners(base64: string, mimeType: string): Promise<MultiBan
       }
     })
 
-    return { candidates }
+    const privacyRegions: PrivacyRegion[] = parsed.privacyRegions.map((r) => ({
+      type: r.type,
+      bbox: {
+        x: clamp(r.bbox.x),
+        y: clamp(r.bbox.y),
+        width: clamp(r.bbox.width),
+        height: clamp(r.bbox.height),
+      },
+    }))
+
+    return { candidates, privacyRegions }
   } catch {
-    return { candidates: [] }
+    return { candidates: [], privacyRegions: [] }
   }
 }
 
@@ -119,7 +141,7 @@ export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse
 
   const [sourceBuffer, analysis] = await Promise.all([
     compressSource(originalBuffer),
-    detectBanners(base64, imageFile.type).catch(() => ({ candidates: [] as UploadCandidate[] })),
+    detectBanners(base64, imageFile.type).catch(() => ({ candidates: [] as UploadCandidate[], privacyRegions: [] as PrivacyRegion[] })),
   ])
 
   const sourceId = randomUUID()
@@ -142,11 +164,13 @@ export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse
       regionText,
       observedAt: observedDate,
       subjectType,
+      privacyRegionsJson: analysis.privacyRegions,
     })
     .returning()
 
   return {
     uploadSourceId: uploadSource.id,
     candidates: analysis.candidates,
+    privacyRegions: analysis.privacyRegions,
   }
 }

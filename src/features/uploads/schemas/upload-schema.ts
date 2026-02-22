@@ -48,8 +48,19 @@ const detectedBannerSchema = z
   })
   .passthrough()
 
+const privacyRegionSchema = z.object({
+  type: z.enum(['face', 'licensePlate']),
+  bbox: z.object({
+    x: z.coerce.number(),
+    y: z.coerce.number(),
+    width: z.coerce.number(),
+    height: z.coerce.number(),
+  }),
+})
+
 export const detectedBannerListSchema = z
   .object({
     banners: z.array(detectedBannerSchema).default([]),
+    privacyRegions: z.array(privacyRegionSchema).default([]),
   })
   .passthrough()
