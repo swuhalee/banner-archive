@@ -6,7 +6,7 @@ import {
   DUPLICATE_THRESHOLD,
   findBestMatch,
   type ExistingBanner,
-} from '@/server/dedup/banner-duplicate'
+} from '@/server/services/banner-duplicate'
 import sharp from 'sharp'
 import { randomUUID } from 'crypto'
 import { eq } from 'drizzle-orm'
