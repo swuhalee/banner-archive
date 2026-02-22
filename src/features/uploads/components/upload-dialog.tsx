@@ -9,7 +9,7 @@ import {
   bannerKeys,
   commitBannerWithProgress,
 } from "@/features/banners";
-import type { BBox, RejectedDuplicate, UploadCandidate } from "@/features/uploads/types/upload";
+import type { BBox, PrivacyRegion, RejectedDuplicate, UploadCandidate } from "@/features/uploads/types/upload";
 import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from "@/lib/constants";
 
 // ─── 타입 ─────────────────────────────────────────────────────────────────────
@@ -67,6 +67,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
   const [step, setStep] = useState<Step>("form");
   const [uploadSourceId, setUploadSourceId] = useState("");
   const [candidates, setCandidates] = useState<EditableCandidate[]>([]);
+  const [privacyRegions, setPrivacyRegions] = useState<PrivacyRegion[]>([]);
   const [savedCount, setSavedCount] = useState(0);
   const [rejectedDuplicates, setRejectedDuplicates] = useState<RejectedDuplicate[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -115,6 +116,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
     setConfirmed2(false);
     setUploadSourceId("");
     setCandidates([]);
+    setPrivacyRegions([]);
     setRejectedDuplicates([]);
     setErrorMessage(null);
     setAnalyzeProgress(0);
@@ -157,6 +159,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
         }
         setUploadSourceId(data.uploadSourceId);
         setCandidates(data.candidates.map(toEditable));
+        setPrivacyRegions(data.privacyRegions);
         setTimeout(() => setStep("review"), 300);
       },
       onError: (err) => {
@@ -228,6 +231,12 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
               <p className="text-[13px] text-[var(--text-muted)]">
                 각 현수막이 개별 아카이브에 추가되었습니다.
               </p>
+              {privacyRegions.length > 0 && (
+                <span className="mx-auto inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-[12px] font-semibold text-green-700">
+                  <span>✓</span>
+                  개인정보 마스킹 적용됨
+                </span>
+              )}
             </>
           ) : (
             <p className="font-bold text-(--text-muted)">저장된 현수막이 없습니다.</p>
@@ -370,6 +379,22 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
               </div>
             ))}
           </div>
+
+          {privacyRegions.length > 0 && (
+            <div className="rounded-[10px] bg-amber-50 px-3 py-2.5 text-[12px] text-amber-700">
+              <span className="font-semibold">개인정보 감지됨</span>
+              {" — "}
+              {[
+                privacyRegions.filter((r) => r.type === "face").length > 0 &&
+                  `얼굴 ${privacyRegions.filter((r) => r.type === "face").length}개`,
+                privacyRegions.filter((r) => r.type === "licensePlate").length > 0 &&
+                  `번호판 ${privacyRegions.filter((r) => r.type === "licensePlate").length}개`,
+              ]
+                .filter(Boolean)
+                .join(", ")}
+              {" 저장 시 자동 마스킹 처리됩니다."}
+            </div>
+          )}
 
           {errorMessage && (
             <p className="text-[13px] text-red-500">{errorMessage}</p>
