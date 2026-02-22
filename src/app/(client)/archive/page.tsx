@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { ArchivePhotoCard, SkeletonPhotoCard, useBanners, type Banner } from '@/features/banners'
-import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from '@/lib/constants/banner-subject-types'
+import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from '@/lib/constants'
 
 export default function ArchivePage() {
   const [regionInput, setRegionInput] = useState('')

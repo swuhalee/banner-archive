@@ -12,7 +12,7 @@ import {
   type RejectedDuplicate,
   type UploadCandidate,
 } from "@/features/banners";
-import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from "@/lib/constants/banner-subject-types";
+import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from "@/lib/constants";
 
 // ─── 타입 ─────────────────────────────────────────────────────────────────────
 

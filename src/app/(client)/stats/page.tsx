@@ -15,7 +15,7 @@ import {
   Pie,
 } from 'recharts'
 import { useStatsOverview, type StatsParams, SkeletonSummaryCard, SkeletonChartSection } from '@/features/stats'
-import { BANNER_SUBJECT_TYPES } from '@/lib/constants/banner-subject-types'
+import { BANNER_SUBJECT_TYPES } from '@/lib/constants'
 
 const CHART_COLORS = ['#4f8ef7', '#f76d4f', '#4fc47a', '#f7c44f', '#a04ff7', '#4ff7e8']
 
