@@ -2,8 +2,8 @@
 
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDaumPostcodePopup } from "react-daum-postcode";
 import RouteDialog from "@/components/ui/route-dialog";
+import RegionSelector from "./region-selector";
 import {
   useAnalyzeBanner,
   bannerKeys,
@@ -51,8 +51,6 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
   const queryClient = useQueryClient();
   const analyzeMutation = useAnalyzeBanner();
 
-  const openPostcode = useDaumPostcodePopup();
-
   const fileInputRef = useRef<HTMLInputElement>(null);
   const analyzeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -73,15 +71,6 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [analyzeProgress, setAnalyzeProgress] = useState(0);
   const [commitProgress, setCommitProgress] = useState(0);
-
-  // ── 주소 검색 ────────────────────────────────────────────────────────────────
-  function handleAddressSearch() {
-    openPostcode({
-      onComplete: (data) => {
-        setRegionText(data.address);
-      },
-    });
-  }
 
   // ── 파일 선택 ────────────────────────────────────────────────────────────────
   function handleFileSelect(file: File) {
@@ -454,22 +443,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
 
             <div className="grid gap-1.5 text-[13px] font-semibold text-[var(--text-muted)]">
               위치
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="주소 검색을 눌러 선택하세요"
-                  value={regionText}
-                  readOnly
-                  className="flex-1"
-                />
-                <button
-                  type="button"
-                  className="btn btn-ghost shrink-0 text-[13px]"
-                  onClick={handleAddressSearch}
-                >
-                  주소 검색
-                </button>
-              </div>
+              <RegionSelector value={regionText} onChange={setRegionText} />
             </div>
 
             <label className="grid gap-1.5 text-[13px] font-semibold text-[var(--text-muted)]">
