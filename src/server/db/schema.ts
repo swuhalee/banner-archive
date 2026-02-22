@@ -115,6 +115,7 @@ export const uploadSources = pgTable('upload_sources', {
   regionText: text('region_text').notNull(),
   observedAt: timestamp('observed_at', { withTimezone: true }).notNull(),
   subjectType: text('subject_type'),
+  privacyRegionsJson: jsonb('privacy_regions_json'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

@@ -40,11 +40,19 @@ async function compressToTarget(
 
 // ─── bbox 기준 크롭 ──────────────────────────────────────────────────────────────
 
-async function cropImage(rotatedBuffer: Buffer, bbox: BBox): Promise<Buffer> {
-  const metadata = await sharp(rotatedBuffer).metadata()
-  const imgWidth = metadata.width ?? 1
-  const imgHeight = metadata.height ?? 1
+type AbsoluteBBox = { x: number; y: number; width: number; height: number }
 
+type PrivacyRegionRaw = {
+  type: string
+  bbox: { x: number; y: number; width: number; height: number }
+}
+
+async function cropImage(
+  rotatedBuffer: Buffer,
+  bbox: BBox,
+  imgWidth: number,
+  imgHeight: number,
+): Promise<{ buffer: Buffer; offset: AbsoluteBBox }> {
   // 수평: bbox 너비의 25% 여백 → 1.5배 폭
   const padX = bbox.width * 0.25
   // 수직: AI 인식이 실제보다 bbox 높이의 ~50% 아래에 치우쳐 있으므로
@@ -61,9 +69,68 @@ async function cropImage(rotatedBuffer: Buffer, bbox: BBox): Promise<Buffer> {
   const cropWidth = Math.max(1, right - left)
   const cropHeight = Math.max(1, bottom - top)
 
-  return sharp(rotatedBuffer)
+  const buffer = await sharp(rotatedBuffer)
     .extract({ left, top, width: cropWidth, height: cropHeight })
     .toBuffer()
+
+  return { buffer, offset: { x: left, y: top, width: cropWidth, height: cropHeight } }
+}
+
+// ─── 개인정보 마스킹 ──────────────────────────────────────────────────────────────
+
+async function blackBoxRegion(region: AbsoluteBBox): Promise<Buffer | null> {
+  const { width, height } = region
+  if (width <= 0 || height <= 0) return null
+  return sharp({
+    create: { width, height, channels: 3, background: { r: 0, g: 0, b: 0 } },
+  })
+    .png()
+    .toBuffer()
+}
+
+async function applyPrivacyMask(
+  cropBuffer: Buffer,
+  cropOffset: AbsoluteBBox,
+  privacyRegions: PrivacyRegionRaw[],
+  sourceWidth: number,
+  sourceHeight: number,
+): Promise<{ buffer: Buffer; appliedRegions: AbsoluteBBox[] }> {
+  if (privacyRegions.length === 0) return { buffer: cropBuffer, appliedRegions: [] }
+
+  const composites: sharp.OverlayOptions[] = []
+  const appliedRegions: AbsoluteBBox[] = []
+
+  for (const region of privacyRegions) {
+    // 소스 이미지 비율 좌표 → 크롭 이미지 기준 픽셀 좌표로 변환
+    const relX = Math.round(region.bbox.x * sourceWidth - cropOffset.x)
+    const relY = Math.round(region.bbox.y * sourceHeight - cropOffset.y)
+    const relW = Math.round(region.bbox.width * sourceWidth)
+    const relH = Math.round(region.bbox.height * sourceHeight)
+
+    // 크롭 영역과 교차하는 부분만 처리
+    const clampedX = Math.max(0, relX)
+    const clampedY = Math.max(0, relY)
+    const clampedW = Math.min(cropOffset.width, relX + relW) - clampedX
+    const clampedH = Math.min(cropOffset.height, relY + relH) - clampedY
+
+    console.log(`[mask-debug] region(${region.type}) abs=(${relX},${relY},${relW}x${relH}) → clamped=(${clampedX},${clampedY},${clampedW}x${clampedH}) cropSize=${cropOffset.width}x${cropOffset.height}`)
+    if (clampedW <= 0 || clampedH <= 0) {
+      console.log(`[mask-debug] → SKIPPED (범위 밖)`)
+      continue
+    }
+
+    const pixelated = await blackBoxRegion({ x: clampedX, y: clampedY, width: clampedW, height: clampedH })
+    if (pixelated) {
+      composites.push({ input: pixelated, left: clampedX, top: clampedY })
+      appliedRegions.push({ x: clampedX, y: clampedY, width: clampedW, height: clampedH })
+    }
+  }
+
+  console.log(`[mask-debug] composites 적용 수: ${composites.length}`)
+  if (composites.length === 0) return { buffer: cropBuffer, appliedRegions: [] }
+
+  const maskedBuffer = await sharp(cropBuffer).composite(composites).toBuffer()
+  return { buffer: maskedBuffer, appliedRegions }
 }
 
 // ─── Route Handler ────────────────────────────────────────────────────────────
@@ -193,23 +260,29 @@ export async function POST(request: NextRequest) {
 
         const sourceBuffer = Buffer.from(await sourceBlob.arrayBuffer())
         const rotatedBuffer = await sharp(sourceBuffer).rotate().toBuffer()
+        const { width: srcWidth = 1, height: srcHeight = 1 } = await sharp(rotatedBuffer).metadata()
+        const rawPrivacyRegions = (uploadSource.privacyRegionsJson ?? []) as PrivacyRegionRaw[]
+        console.log(`[mask-debug] privacyRegions from DB: ${rawPrivacyRegions.length}건`, JSON.stringify(rawPrivacyRegions))
+        console.log(`[mask-debug] source image size: ${srcWidth}x${srcHeight}`)
         send({ progress: 20 })
 
-        // ── 5. 각 후보별 크롭 + 압축 + Storage 업로드 (20% → 88%) ────────────
+        // ── 5. 각 후보별 크롭 + 마스킹 + 압축 + Storage 업로드 (20% → 88%) ──
         type CropUploadResult = {
           candidate: CommitCandidate
           thumbPath: string
           detailPath: string
+          appliedRegions: AbsoluteBBox[]
         }
 
         let completed = 0
         const cropResults: CropUploadResult[] = await Promise.all(
           nonDuplicates.map(async (candidate) => {
-            const cropBuffer = await cropImage(rotatedBuffer, candidate.bbox)
+            const { buffer: cropBuffer, offset: cropOffset } = await cropImage(rotatedBuffer, candidate.bbox, srcWidth, srcHeight)
+            const { buffer: maskedBuffer, appliedRegions } = await applyPrivacyMask(cropBuffer, cropOffset, rawPrivacyRegions, srcWidth, srcHeight)
 
             const [thumbBuffer, detailBuffer] = await Promise.all([
-              compressToTarget(cropBuffer, 1200, 400, 78),
-              compressToTarget(cropBuffer, 2400, 1200, 85),
+              compressToTarget(maskedBuffer, 1200, 400, 78),
+              compressToTarget(maskedBuffer, 2400, 1200, 85),
             ])
 
             const cropId = randomUUID()
@@ -234,7 +307,7 @@ export async function POST(request: NextRequest) {
             // 20% ~ 88% 구간을 현수막 수 기준으로 균등 배분
             send({ progress: Math.round(20 + (completed / total) * 68) })
 
-            return { candidate, thumbPath, detailPath }
+            return { candidate, thumbPath, detailPath, appliedRegions }
           }),
         )
 
@@ -244,7 +317,7 @@ export async function POST(request: NextRequest) {
         const insertedBannerIds = await db.transaction(async (tx) => {
           const ids: string[] = []
 
-          for (const { candidate, thumbPath, detailPath } of cropResults) {
+          for (const { candidate, thumbPath, detailPath, appliedRegions } of cropResults) {
             const [banner] = await tx
               .insert(banners)
               .values({
@@ -263,7 +336,8 @@ export async function POST(request: NextRequest) {
                 bannerId: banner.id,
                 maskedImageUrl: thumbPath,
                 originalImageUrl: detailPath,
-                maskingStatus: 'pending',
+                maskingStatus: 'success',
+                maskingMetadata: appliedRegions.length > 0 ? { regions: appliedRegions } : null,
               })
               .returning()
 
