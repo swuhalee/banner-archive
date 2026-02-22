@@ -37,12 +37,4 @@ export type {
   SubmitAppealInput,
 } from './schemas/banner-schema'
 
-export type {
-  AnalyzeResponse,
-  Banner,
-  BannerImage,
-  BBox,
-  CommitCandidate,
-  RejectedDuplicate,
-  UploadCandidate,
-} from './types/banner'
+export type { Banner, BannerImage } from './types/banner'

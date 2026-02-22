@@ -3,7 +3,7 @@
 import { db } from '@/server/db'
 import { uploadSources } from '@/server/db/schema'
 import { createAdminClient } from '@/server/lib/supabase/admin'
-import type { BBox, UploadCandidate, AnalyzeResponse } from '@/features/banners/types/banner'
+import type { BBox, UploadCandidate, AnalyzeResponse } from '@/features/uploads/types/upload'
 import {
   analyzeBannerInputSchema,
   detectedBannerListSchema,

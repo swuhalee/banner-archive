@@ -3,12 +3,8 @@ import { fetchBanners } from '@/features/banners/actions/fetch-banners'
 import { fetchBanner } from '@/features/banners/actions/fetch-banner'
 import { analyzeBanner } from '@/features/uploads/actions/analyze-banner'
 import type { BannerListParams } from '@/features/banners/schemas/banner-schema'
-import type {
-  BannerListResponse,
-  BannerWithImages,
-  CommitRequest,
-  CommitResponse,
-} from '@/features/banners/types/banner'
+import type { BannerListResponse, BannerWithImages } from '@/features/banners/types/banner'
+import type { CommitRequest, CommitResponse } from '@/features/uploads/types/upload'
 
 // ─── React Query 키 팩토리 ─────────────────────────────────────────────────────
 

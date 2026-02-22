@@ -8,10 +8,8 @@ import {
   useAnalyzeBanner,
   bannerKeys,
   commitBannerWithProgress,
-  type BBox,
-  type RejectedDuplicate,
-  type UploadCandidate,
 } from "@/features/banners";
+import type { BBox, RejectedDuplicate, UploadCandidate } from "@/features/uploads/types/upload";
 import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from "@/lib/constants";
 
 // ─── 타입 ─────────────────────────────────────────────────────────────────────
