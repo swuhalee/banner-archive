@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { sanitizeReturnPath } from "@/lib/return-path";
+import Image from "next/image";
 
 type ArchiveItem = {
   id: string;
@@ -27,6 +28,16 @@ export default function ArchivePhotoCard({ item, fromPath = "/" }: ArchivePhotoC
           alt={item.region}
           className="block w-full grayscale border-b border-[var(--line)]"
         />
+        
+        {/* <img> 태그를 사용하면 화면에 보이지 않는 이미지까지 한꺼번에 로드함 (No Lazy Loading) */}
+        {/* <Image
+          src={item.image}
+          alt={item.region}
+          width={800}
+          height={600}
+          className="block w-full grayscale border-b border-[var(--line)]"
+          style={{ width: "100%", height: "auto" }}
+        /> */}
         <div
           className="absolute inset-0 bg-black/20 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
           aria-hidden

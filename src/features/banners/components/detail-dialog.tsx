@@ -140,7 +140,7 @@ export default function DetailDialog({ id, closeHref = "/archive", asModal = tru
   }
 
   return (
-    <RouteDialog ariaLabel="상세 기록 모달" dialogClassName="detail-dialog" closeHref={closeHref}>
+    <RouteDialog ariaLabel="상세 기록 모달" dialogClassName="detail-dialog" closeHref={closeHref} disableOutsideClose={reportOpen}>
       {content}
     </RouteDialog>
   );

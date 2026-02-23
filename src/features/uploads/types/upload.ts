@@ -51,8 +51,4 @@ export type CommitResponse = {
   rejectedDuplicates: RejectedDuplicate[]
   savedCount: number
   rejectedCount: number
-  /** @deprecated savedBannerIds 사용 권장 */
-  bannerIds: string[]
-  /** @deprecated savedCount 사용 권장 */
-  count: number
 }

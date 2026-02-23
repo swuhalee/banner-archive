@@ -132,8 +132,6 @@ export async function POST(request: NextRequest) {
               rejectedDuplicates,
               savedCount: 0,
               rejectedCount: rejectedDuplicates.length,
-              bannerIds: [],
-              count: 0,
             },
           })
           controller.close()
@@ -273,8 +271,6 @@ export async function POST(request: NextRequest) {
             rejectedDuplicates,
             savedCount: insertedBannerIds.length,
             rejectedCount: rejectedDuplicates.length,
-            bannerIds: insertedBannerIds,
-            count: insertedBannerIds.length,
           },
         })
         controller.close()

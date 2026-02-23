@@ -10,9 +10,10 @@ type RouteDialogProps = {
   dialogClassName: string;
   closeHref: string;
   children: ReactNode;
+  disableOutsideClose?: boolean;
 };
 
-export default function RouteDialog({ ariaLabel, dialogClassName, closeHref, children }: RouteDialogProps) {
+export default function RouteDialog({ ariaLabel, dialogClassName, closeHref, children, disableOutsideClose = false }: RouteDialogProps) {
   const router = useRouter();
   // 닫기 로직이 중복 실행되는 것을 막는 잠금 플래그
   const isClosingRef = useRef(false);
@@ -33,12 +34,11 @@ export default function RouteDialog({ ariaLabel, dialogClassName, closeHref, chi
   // Headless UI Dialog의 onClose에서 호출:
   // - Escape 키
   // - 패널 바깥(backdrop) 클릭
-  // 단, 신고 다이얼로그가 열려 있는 동안은 부모 모달 닫힘을 막음
+  // 단, 자식 다이얼로그가 열려 있는 동안은 부모 모달 닫힘을 막음
   const handleDialogClose = useCallback(() => {
-    const reportOpen = document.querySelector("div.report-dialog");
-    if (reportOpen) return;
+    if (disableOutsideClose) return;
     handleClose();
-  }, [handleClose]);
+  }, [handleClose, disableOutsideClose]);
 
   return (
     <Dialog open onClose={handleDialogClose} className={dialogClassName}>

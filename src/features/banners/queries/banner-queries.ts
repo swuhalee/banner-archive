@@ -59,7 +59,6 @@ export function useBanners(params: BannerListParams = {}) {
   return useQuery({
     queryKey: bannerKeys.list(params),
     queryFn: () => fetchBanners(params),
-    staleTime: 30 * 1000,
   })
 }
 
@@ -68,6 +67,7 @@ export function useBanner(id: string) {
     queryKey: bannerKeys.detail(id),
     queryFn: () => fetchBanner(id),
     enabled: Boolean(id),
+    // 상세 데이터는 목록보다 변경이 드물기에 캐시를 더 길게 유지
     staleTime: 60 * 1000,
   })
 }

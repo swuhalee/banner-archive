@@ -29,9 +29,9 @@ export async function fetchBanners(params: BannerListParams = {}): Promise<Banne
     eq(banners.status, 'active'),
     q
       ? or(
-          ilike(banners.title, `%${q}%`),
-          sql`${banners.hashtags} @> ARRAY[${q}]::text[]`
-        )
+        ilike(banners.title, `%${q}%`),
+        sql`${banners.hashtags} @> ARRAY[${q}]::text[]`
+      )
       : undefined,
     fromDate ? gte(banners.firstSeenAt, fromDate) : undefined,
     toDate ? lte(banners.firstSeenAt, toDate) : undefined,
@@ -57,12 +57,14 @@ export async function fetchBanners(params: BannerListParams = {}): Promise<Banne
     lastSeenAt: banner.lastSeenAt.toISOString(),
     createdAt: banner.createdAt.toISOString(),
     updatedAt: banner.updatedAt.toISOString(),
-    images: banner.images.map((img) => ({
-      ...img,
-      createdAt: img.createdAt.toISOString(),
-      maskedImageUrl: resolveStorageUrl(img.maskedImageUrl)!,
-      originalImageUrl: resolveStorageUrl(img.originalImageUrl),
-    })),
+    images: banner.images
+      .filter((img) => img.maskedImageUrl != null) // maskedImageUrl이 없는 이미지는 제외
+      .map((img) => ({
+        ...img,
+        createdAt: img.createdAt.toISOString(),
+        maskedImageUrl: resolveStorageUrl(img.maskedImageUrl)!, // maskedImageUrl는 실제 사용 img라 반드시 존재해야 함
+        originalImageUrl: resolveStorageUrl(img.originalImageUrl),
+      })),
   }))
 
   return {

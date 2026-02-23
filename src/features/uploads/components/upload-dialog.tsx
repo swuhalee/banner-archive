@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import RouteDialog from "@/components/ui/route-dialog";
 import RegionSelector from "./region-selector";
@@ -29,6 +29,36 @@ type UploadDialogProps = {
   asModal?: boolean;
 };
 
+const createInitialFormState = () => ({
+  previewUrl: null as string | null,
+  selectedFile: null as File | null,
+  regionText: "",
+  observedAt: new Date().toISOString().slice(0, 10),
+  subjectType: "" as BannerSubjectType | "",
+  confirmed1: false,
+  confirmed2: false,
+});
+
+const initialAnalysisState = {
+  uploadSourceId: "",
+  candidates: [] as EditableCandidate[],
+  privacyRegions: [] as PrivacyRegion[],
+  faceCount: 0,
+  plateCount: 0,
+};
+
+const initialUiState = {
+  step: "form" as Step,
+  errorMessage: null as string | null,
+  analyzeProgress: 0,
+  commitProgress: 0,
+};
+
+const initialResultState = {
+  savedCount: 0,
+  rejectedDuplicates: [] as RejectedDuplicate[],
+};
+
 function toEditable(c: UploadCandidate): EditableCandidate {
   return {
     tempId: c.tempId,
@@ -48,32 +78,35 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
   const fileInputRef = useRef<HTMLInputElement>(null);
   const analyzeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [regionText, setRegionText] = useState("");
-  const [observedAt, setObservedAt] = useState(new Date().toISOString().slice(0, 10));
-  const [subjectType, setSubjectType] = useState<BannerSubjectType | "">("");
-  const [confirmed1, setConfirmed1] = useState(false);
-  const [confirmed2, setConfirmed2] = useState(false);
+  const [formState, setFormState] = useState(createInitialFormState);
+  const [analysisState, setAnalysisState] = useState(initialAnalysisState);
+  const [uiState, setUiState] = useState(initialUiState);
+  const [resultState, setResultState] = useState(initialResultState);
 
-  const [step, setStep] = useState<Step>("form");
-  const [uploadSourceId, setUploadSourceId] = useState("");
-  const [candidates, setCandidates] = useState<EditableCandidate[]>([]);
-  const [privacyRegions, setPrivacyRegions] = useState<PrivacyRegion[]>([]);
-  const [savedCount, setSavedCount] = useState(0);
-  const [rejectedDuplicates, setRejectedDuplicates] = useState<RejectedDuplicate[]>([]);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [analyzeProgress, setAnalyzeProgress] = useState(0);
-  const [commitProgress, setCommitProgress] = useState(0);
+  const {
+    previewUrl,
+    selectedFile,
+    regionText,
+    observedAt,
+    subjectType,
+    confirmed1,
+    confirmed2,
+  } = formState;
+  const { uploadSourceId, candidates, privacyRegions, faceCount, plateCount } = analysisState;
+  const { step, errorMessage, analyzeProgress, commitProgress } = uiState;
+  const { savedCount, rejectedDuplicates } = resultState;
 
   // 파일 선택
   function handleFileSelect(file: File) {
-    setSelectedFile(file);
-    setPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
+    setFormState((prev) => {
+      if (prev.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return {
+        ...prev,
+        selectedFile: file,
+        previewUrl: URL.createObjectURL(file),
+      };
     });
-    setErrorMessage(null);
+    setUiState((prev) => ({ ...prev, errorMessage: null }));
   }
 
   function handleDrop(e: React.DragEvent) {
@@ -82,6 +115,13 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
     if (file) handleFileSelect(file);
   }
 
+  // previewUrl이 바뀌거나 컴포넌트가 사라질 때 이전 URL 해제
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
   // 전체 초기화
   function handleReset() {
     if (analyzeTimerRef.current) {
@@ -89,21 +129,13 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
       analyzeTimerRef.current = null;
     }
     analyzeMutation.reset();
-    setStep("form");
-    setSelectedFile(null);
-    setPreviewUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
-    setRegionText("");
-    setObservedAt(new Date().toISOString().slice(0, 10));
-    setSubjectType("");
-    setConfirmed1(false);
-    setConfirmed2(false);
-    setUploadSourceId("");
-    setCandidates([]);
-    setPrivacyRegions([]);
-    setRejectedDuplicates([]);
-    setErrorMessage(null);
-    setAnalyzeProgress(0);
-    setCommitProgress(0);
+    setFormState((prev) => {
+      if (prev.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return createInitialFormState();
+    });
+    setAnalysisState(initialAnalysisState);
+    setResultState(initialResultState);
+    setUiState(initialUiState);
   }
 
   // 분석 요청
@@ -116,15 +148,21 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
     formData.append("observedAt", observedAt);
     if (subjectType) formData.append("subjectType", subjectType);
 
-    setStep("analyzing");
-    setAnalyzeProgress(0);
-    setErrorMessage(null);
+    setUiState((prev) => ({
+      ...prev,
+      step: "analyzing",
+      analyzeProgress: 0,
+      errorMessage: null,
+    }));
 
     // 분석 progress
     let elapsed = 0;
     analyzeTimerRef.current = setInterval(() => {
       elapsed += 200;
-      setAnalyzeProgress(Math.min(89, Math.round(90 * (1 - Math.exp(-elapsed / 12000)))));
+      setUiState((prev) => ({
+        ...prev,
+        analyzeProgress: Math.min(89, Math.round(90 * (1 - Math.exp(-elapsed / 12000)))),
+      }));
     }, 200);
 
     analyzeMutation.mutate(formData, {
@@ -133,25 +171,37 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
           clearInterval(analyzeTimerRef.current);
           analyzeTimerRef.current = null;
         }
-        setAnalyzeProgress(100);
+        setUiState((prev) => ({ ...prev, analyzeProgress: 100 }));
 
         if (data.candidates.length === 0) {
-          setErrorMessage("현수막을 인식할 수 없습니다. 다른 사진을 업로드해주세요.");
-          setStep("form");
+          setUiState((prev) => ({
+            ...prev,
+            errorMessage: "현수막을 인식할 수 없습니다. 다른 사진을 업로드해주세요.",
+            step: "form",
+          }));
           return;
         }
-        setUploadSourceId(data.uploadSourceId);
-        setCandidates(data.candidates.map(toEditable));
-        setPrivacyRegions(data.privacyRegions);
-        setTimeout(() => setStep("review"), 300);
+        setAnalysisState({
+          uploadSourceId: data.uploadSourceId,
+          candidates: data.candidates.map(toEditable),
+          privacyRegions: data.privacyRegions,
+          faceCount: data.privacyRegions.filter((r) => r.type === "face").length,
+          plateCount: data.privacyRegions.filter((r) => r.type === "licensePlate").length,
+        });
+        setTimeout(() => {
+          setUiState((prev) => ({ ...prev, step: "review" }));
+        }, 300);
       },
       onError: (err) => {
         if (analyzeTimerRef.current) {
           clearInterval(analyzeTimerRef.current);
           analyzeTimerRef.current = null;
         }
-        setErrorMessage(err instanceof Error ? err.message : "분석에 실패했습니다");
-        setStep("form");
+        setUiState((prev) => ({
+          ...prev,
+          errorMessage: err instanceof Error ? err.message : "분석에 실패했습니다",
+          step: "form",
+        }));
       },
     });
   }
@@ -170,30 +220,39 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
       confidence: c.confidence,
     }));
 
-    setStep("committing");
-    setCommitProgress(0);
-    setErrorMessage(null);
+    setUiState((prev) => ({
+      ...prev,
+      step: "committing",
+      commitProgress: 0,
+      errorMessage: null,
+    }));
 
     try {
       const data = await commitBannerWithProgress(
         { uploadSourceId, selectedCandidates },
-        (percent) => setCommitProgress(percent),
+        (percent) => setUiState((prev) => ({ ...prev, commitProgress: percent })),
       );
       queryClient.invalidateQueries({ queryKey: bannerKeys.lists() });
-      setSavedCount(data.savedCount);
-      setRejectedDuplicates(data.rejectedDuplicates);
-      setStep("done");
+      setResultState({
+        savedCount: data.savedCount,
+        rejectedDuplicates: data.rejectedDuplicates,
+      });
+      setUiState((prev) => ({ ...prev, step: "done" }));
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "저장에 실패했습니다");
-      setStep("review");
+      setUiState((prev) => ({
+        ...prev,
+        errorMessage: err instanceof Error ? err.message : "저장에 실패했습니다",
+        step: "review",
+      }));
     }
   }
 
   // 현수막이 여러 개라면, 개별 필드 업데이트
   function updateCandidate(tempId: string, patch: Partial<EditableCandidate>) {
-    setCandidates((prev) =>
-      prev.map((c) => (c.tempId === tempId ? { ...c, ...patch } : c)),
-    );
+    setAnalysisState((prev) => ({
+      ...prev,
+      candidates: prev.candidates.map((c) => (c.tempId === tempId ? { ...c, ...patch } : c)),
+    }));
   }
 
   const canAnalyze = Boolean(selectedFile && regionText && observedAt && confirmed1 && confirmed2);
@@ -251,12 +310,11 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
           </p>
           <div className="mx-auto w-full max-w-[260px]">
             <div className="mb-1.5 flex items-center justify-between text-[12px] text-[var(--text-muted)]">
-              {/* <span>{step === "analyzing" ? "분석 중..." : "저장 중..."}</span> */}
               <span className="font-semibold tabular-nums">{currentProgress}%</span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--line)]">
               <div
-                className="h-full rounded-full bg-[#3b82f6] transition-all duration-300 ease-out"
+                className="h-full rounded-full bg-(--accent) transition-all duration-300 ease-out"
                 style={{ width: `${currentProgress}%` }}
               />
             </div>
@@ -267,8 +325,6 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
       {/* 검토 화면 */}
       {step === "review" && (
         <div className="grid gap-4">
-          {/* <h2 className="font-bold">감지된 현수막 검토</h2> */}
-
           {/* 이미지 + bbox 오버레이 */}
           <div className="relative w-full overflow-hidden rounded-[12px] border border-[var(--line)]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -282,13 +338,13 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
                   top: `${c.bbox.y * 100}%`,
                   width: `${c.bbox.width * 100}%`,
                   height: `${c.bbox.height * 100}%`,
-                  border: `2px solid ${c.excluded ? "#9ca3af" : "#3b82f6"}`,
+                  border: `2px solid ${c.excluded ? "var(--accent-muted)" : "var(--accent)"}`,
                   opacity: c.excluded ? 0.4 : 1,
                 }}
               >
                 <span
                   className="absolute left-0 top-0 px-1 text-[11px] font-bold text-white"
-                  style={{ background: c.excluded ? "#9ca3af" : "#3b82f6" }}
+                  style={{ background: c.excluded ? "var(--accent-muted)" : "var(--accent)" }}
                 >
                   {i + 1}
                 </span>
@@ -307,7 +363,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
                 <div className="flex items-center gap-2">
                   <span
                     className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
-                    style={{ background: c.excluded ? "#9ca3af" : "#3b82f6" }}
+                    style={{ background: c.excluded ? "var(--accent-muted)" : "var(--accent)" }}
                   >
                     {i + 1}
                   </span>
@@ -367,10 +423,8 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
               <span className="font-semibold">개인정보 감지됨</span>
               {" — "}
               {[
-                privacyRegions.filter((r) => r.type === "face").length > 0 &&
-                  `얼굴 ${privacyRegions.filter((r) => r.type === "face").length}개`,
-                privacyRegions.filter((r) => r.type === "licensePlate").length > 0 &&
-                  `번호판 ${privacyRegions.filter((r) => r.type === "licensePlate").length}개`,
+                faceCount > 0 && `얼굴 ${faceCount}개`,
+                plateCount > 0 && `번호판 ${plateCount}개`,
               ]
                 .filter(Boolean)
                 .join(", ")}
@@ -436,7 +490,10 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
 
             <div className="grid gap-1.5 text-[13px] font-semibold text-[var(--text-muted)]">
               위치
-              <RegionSelector value={regionText} onChange={setRegionText} />
+              <RegionSelector
+                value={regionText}
+                onChange={(value) => setFormState((prev) => ({ ...prev, regionText: value }))}
+              />
             </div>
 
             <label className="grid gap-1.5 text-[13px] font-semibold text-[var(--text-muted)]">
@@ -444,7 +501,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
               <input
                 type="date"
                 value={observedAt}
-                onChange={(e) => setObservedAt(e.target.value)}
+                onChange={(e) => setFormState((prev) => ({ ...prev, observedAt: e.target.value }))}
               />
             </label>
 
@@ -452,7 +509,12 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
               주체 유형
               <select
                 value={subjectType}
-                onChange={(e) => setSubjectType(e.target.value as BannerSubjectType | "")}
+                onChange={(e) =>
+                  setFormState((prev) => ({
+                    ...prev,
+                    subjectType: e.target.value as BannerSubjectType | "",
+                  }))
+                }
               >
                 <option value="" disabled>선택하세요</option>
                 {BANNER_SUBJECT_TYPES.map((type) => (
@@ -466,7 +528,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
                 type="checkbox"
                 className="m-0 h-[14px] w-[14px]"
                 checked={confirmed1}
-                onChange={(e) => setConfirmed1(e.target.checked)}
+                onChange={(e) => setFormState((prev) => ({ ...prev, confirmed1: e.target.checked }))}
               />
               사진을 촬영한 실제 위치와 날짜 정보가 정확합니다.
             </label>
@@ -476,7 +538,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
                 type="checkbox"
                 className="m-0 h-[14px] w-[14px]"
                 checked={confirmed2}
-                onChange={(e) => setConfirmed2(e.target.checked)}
+                onChange={(e) => setFormState((prev) => ({ ...prev, confirmed2: e.target.checked }))}
               />
               직접 촬영한 사진이며, 본 아카이브 서비스의 기록 목적으로 활용됨에 동의합니다.
             </label>
