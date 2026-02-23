@@ -12,7 +12,18 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import sharp from 'sharp'
 import { randomUUID } from 'crypto'
 
+/*
+  이 파일은 업로드 및 분석 단계를 담당하는 Server Action
+  흐름:
+  1) 입력값/파일 검증
+  2) AI가 읽기 좋은 분석용 이미지 생성
+  3) Gemini로 현수막/개인정보 영역 감지
+  4) 원본(압축본)을 Storage에 저장
+  5) upload_sources에 메타데이터 저장 후 uploadSourceId 반환
+*/
+
 async function compressSource(input: Buffer): Promise<Buffer> {
+  // 저장용 원본 이미지를 너무 크지 않게 압축(WebP)
   return sharp(input)
     .rotate()
     .resize({ width: 4800, fit: 'inside', withoutEnlargement: true })
@@ -25,6 +36,7 @@ type MultiBannerAnalysis = {
   privacyRegions: PrivacyRegion[]
 }
 
+// Gemini 에러 메시지를 사용자가 이해하기 쉬운 문구로 교체
 function toFriendlyAnalyzeError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error)
   const isQuotaError =
@@ -91,12 +103,13 @@ const DETECTION_PROMPT = `이 사진에서 보이는 모든 현수막을 감지�
 - 현수막이 없으면: { "banners": [], "privacyRegions": [] }`
 
 function parseDetectedBannerResponse(raw: string) {
+  // AI 응답에 공백/설명 텍스트가 섞일 수 있어 단계적으로 JSON을 추출
   const trimmed = raw.trim()
 
   try {
     return JSON.parse(trimmed)
   } catch {
-    // Gemini occasionally wraps JSON with markdown/code fences or extra text.
+    // 1차 파싱 실패 시 아래 fallback으로 진행
   }
 
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
@@ -104,7 +117,7 @@ function parseDetectedBannerResponse(raw: string) {
     try {
       return JSON.parse(fenced[1].trim())
     } catch {
-      // Continue to object extraction fallback.
+      // 2차 파싱 실패 시 마지막 fallback으로 진행
     }
   }
 
@@ -119,6 +132,7 @@ function parseDetectedBannerResponse(raw: string) {
 }
 
 async function buildAnalysisImage(input: Buffer): Promise<Buffer> {
+  // AI 분석용 이미지는 JPEG로 별도 생성 (모델이 WebP보다 JPEG을 더 잘 처리하는 것으로 보여서)
   return sharp(input)
     .rotate()
     .resize({ width: 2560, fit: 'inside', withoutEnlargement: true })
@@ -146,9 +160,11 @@ async function detectBanners(imageBuffer: Buffer, mimeType: string): Promise<Mul
 
   const raw = result.response.text()
 
+  // AI 출력(JSON)을 스키마로 검증해 형식 오류를 조기에 잡아냄
   const parsed = detectedBannerListSchema.parse(parseDetectedBannerResponse(raw))
   const bannerList = parsed.banners
 
+  // AI 응답값을 내부 타입으로 정리하고, bbox/신뢰도는 0~1 범위로 보정(clamp) 
   const candidates: UploadCandidate[] = bannerList.map((b, idx) => {
     const bbox = b.bbox ?? {}
     const parsedBbox: BBox = {
@@ -181,6 +197,8 @@ async function detectBanners(imageBuffer: Buffer, mimeType: string): Promise<Mul
   return { candidates, privacyRegions }
 }
 
+// 숫자를 min~max 범위 안으로 고정 (이상치 방어)
+// 이상치: AI가 bbox 좌표나 신뢰도를 0~1 범위를 벗어나게 출력하는 경우가 종종 있어서, 이를 방지하기 위한 유틸 함수
 function clamp(v: number, min = 0, max = 1): number {
   return Math.min(max, Math.max(min, v))
 }
@@ -191,6 +209,7 @@ function clamp(v: number, min = 0, max = 1): number {
 //   observedAt   string   목격 날짜 ISO 8601 (필수)
 //   subjectType  string   주체 유형 (선택)
 export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse> {
+  // 1) 업로드 폼 입력값 검증
   const { image: imageFile, regionText, observedAt, subjectType } = analyzeBannerInputSchema.parse({
     image: formData.get('image'),
     regionText: formData.get('regionText'),
@@ -200,12 +219,16 @@ export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse
 
   const observedDate = new Date(observedAt)
 
+  // 2) 브라우저 File -> Node Buffer 변환
   const originalBuffer = Buffer.from(await imageFile.arrayBuffer())
 
+  // 3) 저장용/분석용 이미지를 병렬로 생성
   const [sourceBuffer, analysisBuffer] = await Promise.all([
     compressSource(originalBuffer),
     buildAnalysisImage(originalBuffer),
   ])
+
+  // 4) AI 분석 실행 (실패 시 사용자 친화 메시지로 변환)
   let analysis: MultiBannerAnalysis
   try {
     analysis = await detectBanners(analysisBuffer, 'image/jpeg')
@@ -213,7 +236,7 @@ export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse
     throw toFriendlyAnalyzeError(error)
   }
 
-  // Optional second pass. Disabled by default to avoid doubling Gemini quota usage.
+  // 5) 선택적 2차 분석: 1차에서 후보가 0개일 때만 재시도 --> 기본은 OFF(쿼터/비용 증가 방지)
   const enableSecondPass = process.env.ENABLE_ANALYZE_SECOND_PASS === 'true'
   if (enableSecondPass && analysis.candidates.length === 0) {
     try {
@@ -227,6 +250,7 @@ export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse
   const sourcePath = `sources/${sourceId}.webp`
   const bucket = process.env.SUPABASE_STORAGE_BUCKET!
 
+  // 6) 원본(압축본) 이미지를 Storage에 저장
   const supabase = createAdminClient()
   const { error: uploadError } = await supabase.storage
     .from(bucket)
@@ -236,6 +260,7 @@ export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse
     throw new Error(`원본 이미지 업로드 실패: ${uploadError.message}`)
   }
 
+  // 7) upload_sources에 원본 경로/위치/날짜/개인정보 영역 메타데이터 저장
   const [uploadSource] = await db
     .insert(uploadSources)
     .values({
@@ -247,6 +272,7 @@ export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse
     })
     .returning()
 
+  // 8) 다음 단계(commit API)에서 사용할 식별자와 분석 결과 반환
   return {
     uploadSourceId: uploadSource.id,
     candidates: analysis.candidates,

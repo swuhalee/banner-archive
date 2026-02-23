@@ -5,13 +5,9 @@ import type { StatsOverviewResponse } from '@/features/stats/types/stats'
 
 export type { StatsParams, StatsOverviewResponse }
 
-// ─── React Query 키 팩토리 ─────────────────────────────────────────────────────
-
 export const statsKeys = {
   overview: (params: StatsParams) => ['stats', 'overview', params] as const,
 }
-
-// ─── React Query 훅 ───────────────────────────────────────────────────────────
 
 export function useStatsOverview(params: StatsParams = {}) {
   return useQuery({

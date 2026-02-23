@@ -4,6 +4,12 @@ import { useState } from 'react'
 import { ArchivePhotoCard, SkeletonPhotoCard, useBanners, type Banner } from '@/features/banners'
 import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from '@/lib/constants'
 
+/*
+ * 아카이브 페이지 컴포넌트 (/archive 경로)
+ * 배너 데이터를 지역과 주체 유형으로 필터링하여 표시함
+ * 지역명으로 그룹핑하여 각 그룹별로 배너를 보여줌
+ * 검색 입력과 드롭다운을 통해 필터링 조건을 설정할 수 있음
+*/
 export default function ArchivePage() {
   const [regionInput, setRegionInput] = useState('')
   const [region, setRegion] = useState('')

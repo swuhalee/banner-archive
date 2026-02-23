@@ -23,6 +23,12 @@ function formatKoreanDate(dateStr: string) {
   }).format(new Date(dateStr));
 }
 
+/*
+  배너 상세 정보 모달 컴포넌트
+  - 배너의 이미지, 위치, 관측 날짜, 카테고리 등의 정보를 보여줌
+  - 더보기 버튼을 통해 신고 기능 제공
+  - asModal prop을 통해 모달 형태 또는 페이지 형태로 렌더링 가능
+*/
 export default function DetailDialog({ id, closeHref = "/archive", asModal = true }: DetailDialogProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);

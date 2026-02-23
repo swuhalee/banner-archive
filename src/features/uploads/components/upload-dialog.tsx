@@ -12,8 +12,6 @@ import {
 import type { BBox, PrivacyRegion, RejectedDuplicate, UploadCandidate } from "@/features/uploads/types/upload";
 import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from "@/lib/constants";
 
-// ─── 타입 ─────────────────────────────────────────────────────────────────────
-
 type EditableCandidate = {
   tempId: string;
   title: string;
@@ -31,8 +29,6 @@ type UploadDialogProps = {
   asModal?: boolean;
 };
 
-// ─── 헬퍼 ─────────────────────────────────────────────────────────────────────
-
 function toEditable(c: UploadCandidate): EditableCandidate {
   return {
     tempId: c.tempId,
@@ -44,8 +40,6 @@ function toEditable(c: UploadCandidate): EditableCandidate {
     excluded: false,
   };
 }
-
-// ─── 컴포넌트 ──────────────────────────────────────────────────────────────────
 
 export default function UploadDialog({ closeHref = "/", asModal = true }: UploadDialogProps) {
   const queryClient = useQueryClient();
@@ -72,7 +66,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
   const [analyzeProgress, setAnalyzeProgress] = useState(0);
   const [commitProgress, setCommitProgress] = useState(0);
 
-  // ── 파일 선택 ────────────────────────────────────────────────────────────────
+  // 파일 선택
   function handleFileSelect(file: File) {
     setSelectedFile(file);
     setPreviewUrl((prev) => {
@@ -88,7 +82,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
     if (file) handleFileSelect(file);
   }
 
-  // ── 전체 초기화 ──────────────────────────────────────────────────────────────
+  // 전체 초기화
   function handleReset() {
     if (analyzeTimerRef.current) {
       clearInterval(analyzeTimerRef.current);
@@ -112,7 +106,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
     setCommitProgress(0);
   }
 
-  // ── Step 1 → Step 2: 분석 요청 ──────────────────────────────────────────────
+  // 분석 요청
   function handleAnalyze() {
     if (!selectedFile || !regionText || !observedAt) return;
 
@@ -126,7 +120,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
     setAnalyzeProgress(0);
     setErrorMessage(null);
 
-    // 시뮬레이션 progress: 지수 감쇠로 90%까지 서서히 증가
+    // 분석 progress
     let elapsed = 0;
     analyzeTimerRef.current = setInterval(() => {
       elapsed += 200;
@@ -162,7 +156,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
     });
   }
 
-  // ── Step 3 → Step 4: 저장 요청 ──────────────────────────────────────────────
+  // 저장 요청
   async function handleCommit() {
     const selected = candidates.filter((c) => !c.excluded);
     if (selected.length === 0) return;
@@ -195,7 +189,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
     }
   }
 
-  // ── 후보 개별 필드 업데이트 ─────────────────────────────────────────────────
+  // 현수막이 여러 개라면, 개별 필드 업데이트
   function updateCandidate(tempId: string, patch: Partial<EditableCandidate>) {
     setCandidates((prev) =>
       prev.map((c) => (c.tempId === tempId ? { ...c, ...patch } : c)),
@@ -206,12 +200,11 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
   const activeCount = candidates.filter((c) => !c.excluded).length;
   const currentProgress = step === "analyzing" ? analyzeProgress : commitProgress;
 
-  // ─── 렌더링 ──────────────────────────────────────────────────────────────────
-
+  // 렌더링
   const content = (
     <section className="upload-modal rounded-[24px] bg-[var(--surface)] p-4">
 
-      {/* ── 완료 화면 ─────────────────────────────────────────────────────────── */}
+      {/* 완료 화면 */}
       {step === "done" && (
         <div className="grid gap-4 p-8 text-center">
           {savedCount > 0 ? (
@@ -242,7 +235,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
         </div>
       )}
 
-      {/* ── 로딩 화면 (분석 / 저장 중) ──────────────────────────────────────── */}
+      {/* 로딩 화면 (분석 / 저장 중) */}
       {(step === "analyzing" || step === "committing") && (
         <div className="grid gap-3 p-8 text-center">
           {previewUrl && (
@@ -271,7 +264,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
         </div>
       )}
 
-      {/* ── 검토 화면 ─────────────────────────────────────────────────────────── */}
+      {/* 검토 화면 */}
       {step === "review" && (
         <div className="grid gap-4">
           {/* <h2 className="font-bold">감지된 현수막 검토</h2> */}
@@ -279,7 +272,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
           {/* 이미지 + bbox 오버레이 */}
           <div className="relative w-full overflow-hidden rounded-[12px] border border-[var(--line)]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={previewUrl!} alt="원본 사진" className="block w-full" />
+            <img src={previewUrl!} alt="원본 사진" className="block w-full" /> {/* TODO: 이미지 사이즈 줄여야 함 */}
             {candidates.map((c, i) => (
               <div
                 key={c.tempId}
@@ -405,7 +398,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
         </div>
       )}
 
-      {/* ── 업로드 폼 ─────────────────────────────────────────────────────────── */}
+      {/* 업로드 폼 */}
       {step === "form" && (
         <div className="grid grid-cols-2 gap-4 max-[1024px]:grid-cols-1">
           {/* 이미지 업로드 영역 */}

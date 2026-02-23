@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { UploadNavLink } from "@/features/uploads";
 
+/*
+ * 모든 페이지에 적용되는 공통 레이아웃 
+*/
 export default function ClientLayout({
   children,
   modal,
@@ -12,6 +15,10 @@ export default function ClientLayout({
     <>
       <header className="site-header">
         <div className="container nav-wrap">
+          {/* 
+            <a> 대신 <Link> 사용하여 Client Side Navigation을 구현함
+            Link가 화면에 보이면 해당 경로의 코드를 미리 로드함 (production 환경)
+          */}
           <Link href="/" className="brand whitespace-nowrap">
             Banner Archive
           </Link>

@@ -6,8 +6,6 @@ import type { BannerListParams } from '@/features/banners/schemas/banner-schema'
 import type { BannerListResponse, BannerWithImages } from '@/features/banners/types/banner'
 import type { CommitRequest, CommitResponse } from '@/features/uploads/types/upload'
 
-// ─── React Query 키 팩토리 ─────────────────────────────────────────────────────
-
 export const bannerKeys = {
   all: ['banners'] as const,
   lists: () => ['banners', 'list'] as const,
@@ -15,8 +13,9 @@ export const bannerKeys = {
   detail: (id: string) => ['banners', 'detail', id] as const,
 }
 
-// ─── commit (SSE 스트리밍) — API Route 유지 ───────────────────────────────────
-
+// POST /api/uploads/commit 엔드포인트에 저장 요청을 보내고, 진행 상황을 실시간으로 수신하는 함수
+// upload-dialog.tsx는 진행률 받기&완료 데이터 받기만 신경 쓰고, 실제 네트워크 통신과 스트림 파싱은 이 함수가 담당하도록 역할 분리
+// 이게 왜 banner-queries.ts에 있냐면, 이 파일이 배너 관련 데이터 통신 레이어라서 fetch/mutation 로직을 같은 모듈에 모아 관리하려는 구조임
 export async function commitBannerWithProgress(
   data: CommitRequest,
   onProgress: (percent: number) => void,
@@ -56,8 +55,6 @@ export async function commitBannerWithProgress(
   throw new Error('스트림이 예상치 않게 종료되었습니다')
 }
 
-// ─── React Query 훅 ───────────────────────────────────────────────────────────
-
 export function useBanners(params: BannerListParams = {}) {
   return useQuery({
     queryKey: bannerKeys.list(params),
@@ -79,5 +76,4 @@ export function useAnalyzeBanner() {
   return useMutation({ mutationFn: analyzeBanner })
 }
 
-// 타입 재사용을 위한 re-export
 export type { BannerListResponse, BannerWithImages, CommitRequest, CommitResponse }
