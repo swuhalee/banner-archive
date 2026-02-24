@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXTAUTH_URL ?? "http://localhost:3000"),
+  metadataBase: new URL(process.env.NEXTAUTH_URL || "https://www.banner-archive.kr"),
   title: "한국 현수막 저장소",
   description: "국내 정당·정치인 현수막을 모아보는 아카이브",
   openGraph: {
