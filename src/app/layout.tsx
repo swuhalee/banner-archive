@@ -23,6 +23,7 @@ export const metadata: Metadata = {
     siteName: "한국 현수막 저장소",
     locale: "ko_KR",
     type: "website",
+    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
   },
 };
 
