@@ -22,6 +22,8 @@ export default function RegionSelector({ value, onChange }: RegionSelectorProps)
   // 외부에서 value가 "" 으로 초기화되면 (handleReset) 내부 state도 초기화
   useEffect(() => {
     if (!value) {
+      // 외부 value 초기화 시 내부 선택 상태를 동기화해야 하므로 예외적으로 상태를 리셋한다.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSido("");
       setSigungu("");
       setEupmyeondong("");
