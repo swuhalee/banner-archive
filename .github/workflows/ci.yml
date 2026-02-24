@@ -60,6 +60,17 @@ jobs:
   e2e:
     name: E2E
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY: placeholder-anon-key
+      SUPABASE_URL: https://placeholder.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
+      SUPABASE_STORAGE_BUCKET: banners
+      DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+      GEMINI_API_KEY: placeholder-gemini-key
+      GEMINI_MODEL: gemini-1.5-flash
+      UPLOAD_DUPLICATE_THRESHOLD_PERCENT: "90"
+      CI: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -81,8 +92,6 @@ jobs:
 
       - name: Run e2e tests
         run: npm run test:e2e
-        env:
-          CI: true
 
       - name: Upload playwright report
         if: always()
