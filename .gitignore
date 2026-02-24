@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/playwright-report
+/test-results
 
 # next.js
 /.next/
@@ -47,3 +49,8 @@ next-env.d.ts
 # drizzle
 drizzle.config.ts
 /drizzle
+
+# skills
+.agents/*
+.claude
+skills-lock.json

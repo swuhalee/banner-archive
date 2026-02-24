@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { db } from '@/server/db'
 import { images, banners } from '@/server/db/schema'
 import { resolveStorageUrl } from '@/server/lib/supabase/storage'
