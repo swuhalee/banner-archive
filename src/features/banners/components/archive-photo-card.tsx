@@ -23,21 +23,22 @@ export default function ArchivePhotoCard({ item, fromPath = "/" }: ArchivePhotoC
         className="relative block"
         aria-label={`${item.region} 상세 보기`}
       >
-        <img
+        {/* <img
           src={item.image}
           alt={item.region}
           className="block w-full grayscale border-b border-[var(--line)]"
-        />
+        /> */}
         
         {/* <img> 태그를 사용하면 화면에 보이지 않는 이미지까지 한꺼번에 로드함 (No Lazy Loading) */}
-        {/* <Image
-          src={item.image}
-          alt={item.region}
-          width={800}
-          height={600}
-          className="block w-full grayscale border-b border-[var(--line)]"
-          style={{ width: "100%", height: "auto" }}
-        /> */}
+        <div className="relative w-full aspect-4/3">
+          <Image
+            src={item.image}
+            alt={item.region}
+            fill
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            className="object-cover grayscale border-b border-(--line)"
+          />
+        </div>
         <div
           className="absolute inset-0 bg-black/20 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
           aria-hidden
