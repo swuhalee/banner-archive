@@ -1,40 +1,49 @@
-import ArchivePhotoCard from "../_components/archive-photo-card";
+'use client'
 
-const byRegion = [
-  {
-    region: "서울",
-    items: [
-      { id: "BA-2201", region: "서울 영등포구", image: "https://picsum.photos/seed/archive-seoul-1/1200/900" },
-      { id: "BA-2200", region: "서울 마포구", image: "https://picsum.photos/seed/archive-seoul-2/1200/1600" },
-    ],
-  },
-  {
-    region: "부산",
-    items: [
-      { id: "BA-2196", region: "부산 남구", image: "https://picsum.photos/seed/archive-busan-1/1200/900" },
-      { id: "BA-2191", region: "부산 수영구", image: "https://picsum.photos/seed/archive-busan-2/1600/900" },
-    ],
-  },
-  {
-    region: "전남",
-    items: [
-      { id: "BA-2189", region: "전남 나주시", image: "https://picsum.photos/seed/archive-jeonnam-1/1200/1600" },
-      { id: "BA-2185", region: "전남 목포시", image: "https://picsum.photos/seed/archive-jeonnam-2/1000/1000" },
-    ],
-  },
-];
+import { useState } from 'react'
+import { ArchivePhotoCard, SkeletonPhotoCard, useBanners, type Banner } from '@/features/banners'
+import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from '@/lib/constants'
 
+/*
+ * 아카이브 페이지 컴포넌트 (/archive 경로)
+ * 배너 데이터를 지역과 주체 유형으로 필터링하여 표시함
+ * 지역명으로 그룹핑하여 각 그룹별로 배너를 보여줌
+ * 검색 입력과 드롭다운을 통해 필터링 조건을 설정할 수 있음
+*/
 export default function ArchivePage() {
+  const [regionInput, setRegionInput] = useState('')
+  const [region, setRegion] = useState('')
+  const [subjectType, setSubjectType] = useState<BannerSubjectType | 'all'>('all')
+
+  const { data, isPending } = useBanners({
+    region: region || undefined,
+    subjectType: subjectType === 'all' ? undefined : subjectType,
+    limit: 60,
+  })
+
+  // 최상위 지역명(첫 단어)으로 그룹핑
+  const grouped = data?.data.reduce<Record<string, Banner[]>>((acc, banner) => {
+    const key = banner.regionText.split(' ')[0]
+    if (!acc[key]) acc[key] = []
+    acc[key].push(banner)
+    return acc
+  }, {})
+
   return (
     <div className="stack-lg">
       <section className="grid grid-cols-[2fr_1fr_1fr] gap-2 pb-[10px] max-[1024px]:grid-cols-1">
-        <input type="text" placeholder="지역 검색" />
-        <select defaultValue="all">
+        <input
+          type="text"
+          placeholder="지역 검색 (Enter로 검색)"
+          value={regionInput}
+          onChange={(e) => setRegionInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') setRegion(regionInput) }}
+        />
+        <select value={subjectType} onChange={(e) => setSubjectType(e.target.value as BannerSubjectType | 'all')}>
           <option value="all">주체 전체</option>
-          <option>정치인</option>
-          <option>정당</option>
-          <option>시장</option>
-          <option>군수</option>
+          {BANNER_SUBJECT_TYPES.map((type) => (
+            <option key={type} value={type}>{type}</option>
+          ))}
         </select>
         <select defaultValue="recent">
           <option value="recent">최근 관측순</option>
@@ -43,24 +52,41 @@ export default function ArchivePage() {
         </select>
       </section>
 
-      {byRegion.map((group) => (
-        <section key={group.region} className="stack-md">
-          <div className="grid gap-1">
-            <h2 className="m-0">{group.region}</h2>
-            <p className="m-0 text-[13px] text-[var(--text-muted)]">{group.region} 지역 기록</p>
-          </div>
-          <div className="masonry">
-            {group.items.map((item, idx) => (
-              <ArchivePhotoCard
-                key={item.id}
-                item={item}
-                mediaClass={`media-${((idx + 1) % 4) + 1}`}
-                fromPath="/archive"
-              />
-            ))}
-          </div>
-        </section>
-      ))}
+      {isPending && (
+        <div className="masonry">
+          {Array.from({ length: 12 }, (_, i) => (
+            <SkeletonPhotoCard key={i} mediaClass={`media-${(i % 4) + 1}`} />
+          ))}
+        </div>
+      )}
+
+      {!isPending && (!grouped || Object.keys(grouped).length === 0) && (
+        <p className="text-[13px] text-(--text-muted)">검색 결과가 없습니다.</p>
+      )}
+
+      {!isPending &&
+        grouped &&
+        Object.entries(grouped).map(([regionKey, items]) => (
+          <section key={regionKey} className="stack-md">
+            <div className="grid gap-1">
+              <h2 className="m-0">{regionKey}</h2>
+              <p className="m-0 text-[13px] text-[var(--text-muted)]">{regionKey} 지역 기록</p>
+            </div>
+            <div className="masonry">
+              {items.map((banner) => (
+                <ArchivePhotoCard
+                  key={banner.id}
+                  item={{
+                    id: banner.id,
+                    region: banner.regionText,
+                    image: banner.images?.[0]?.maskedImageUrl ?? '',
+                  }}
+                  fromPath="/archive"
+                />
+              ))}
+            </div>
+          </section>
+        ))}
     </div>
-  );
+  )
 }

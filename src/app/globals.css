@@ -9,6 +9,8 @@
   --text-muted: #6a6a6a;
   --line: #dddddd;
   --line-strong: #bcbcbc;
+  --accent: #3b82f6;
+  --accent-muted: #9ca3af;
 }
 
 * {

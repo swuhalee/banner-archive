@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
-import DetailDialog from "../../_components/detail-dialog";
-import { sanitizeReturnPath } from "../../_lib/return-path";
+import { DetailDialog } from "@/features/banners";
+import { sanitizeReturnPath } from "@/lib/return-path";
 
 type Props = {
   searchParams: Promise<{ id?: string; from?: string }>;
