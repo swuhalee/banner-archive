@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
@@ -55,10 +56,13 @@ export default function DetailDialog({ id, closeHref = "/archive", asModal = tru
           <>
             <section className="overflow-hidden rounded-[16px] bg-[var(--surface-alt)]">
               {imageUrl && (
-                <img
+                <Image
                   src={imageUrl}
                   alt={banner.regionText}
-                  className="block w-full"
+                  width={0}
+                  height={0}
+                  sizes="100vw"
+                  className="block w-full h-auto"
                 />
               )}
             </section>
