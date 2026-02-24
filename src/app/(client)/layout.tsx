@@ -20,9 +20,9 @@ export default function ClientLayout({
             <a> 대신 <Link> 사용하여 Client Side Navigation을 구현함
             Link가 화면에 보이면 해당 경로의 코드를 미리 로드함 (production 환경)
           */}
-          <Link href="/" className="brand inline-flex items-center gap-2 whitespace-nowrap">
-            <Image src="/logo.svg" alt="한국 현수막 저장소" width={26} height={25} />
-            <span className="hidden md:inline">한국 현수막 저장소</span>
+          <Link href="/" className="brand inline-flex items-center gap-2 whitespace-nowrap" aria-label="한국 현수막 저장소">
+            <Image src="/logo.svg" alt="" width={26} height={25} aria-hidden="true" />
+            <span className="hidden md:inline" aria-hidden="true">한국 현수막 저장소</span>
           </Link>
           <div className="flex min-w-0 flex-1 items-center justify-between gap-2 pl-1 md:gap-3 md:pl-6">
             <nav className="flex items-center gap-1 md:gap-4" aria-label="주요 메뉴">
