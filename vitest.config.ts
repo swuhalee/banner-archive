@@ -10,6 +10,12 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{ts,tsx}', 'tests/**/*.{test,spec}.{ts,tsx}'],
     coverage: {
       reporter: ['text', 'html'],
+      thresholds: {
+        lines: 60,
+        branches: 50,
+        functions: 60,
+        statements: 60,
+      },
     },
   },
   resolve: {
