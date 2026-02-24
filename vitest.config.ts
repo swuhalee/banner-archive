@@ -4,8 +4,7 @@ import { fileURLToPath } from 'node:url'
 export default defineConfig({
   test: {
     globals: true,
-    environment: 'node',
-    environmentMatchGlobs: [['**/*.test.tsx', 'jsdom']],
+    environment: 'jsdom',
     setupFiles: ['./tests/setup/vitest.setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}', 'tests/**/*.{test,spec}.{ts,tsx}'],
     coverage: {
