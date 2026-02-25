@@ -19,6 +19,8 @@ import { randomUUID } from 'crypto'
 import { and, eq } from 'drizzle-orm'
 import { NextRequest, NextResponse } from 'next/server'
 
+export const maxDuration = 60
+
 /*
   이 파일의 역할
   - 사용자가 업로드 화면에서 "저장"을 누르면 이 API가 호출

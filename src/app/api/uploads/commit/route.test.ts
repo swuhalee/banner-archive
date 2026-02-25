@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { POST } from '@/app/api/uploads/commit/route'
+import { POST, maxDuration } from '@/app/api/uploads/commit/route'
 
 describe('POST /api/uploads/commit', () => {
+  it('maxDuration을 60초로 설정한다', () => {
+    expect(maxDuration).toBe(60)
+  })
+
   it('JSON 본문 파싱에 실패하면 400을 반환한다', async () => {
     const req = {
       json: async () => {
