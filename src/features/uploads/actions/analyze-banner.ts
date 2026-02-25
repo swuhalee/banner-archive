@@ -7,19 +7,20 @@ import type { BBox, UploadCandidate, AnalyzeResponse, PrivacyRegion } from '@/fe
 import {
   analyzeBannerInputSchema,
   detectedBannerListSchema,
+  MAX_UPLOAD_FILE_SIZE,
 } from '@/features/uploads/schemas/upload-schema'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import sharp from 'sharp'
-import { randomUUID } from 'crypto'
 
 /*
   이 파일은 업로드 및 분석 단계를 담당하는 Server Action
   흐름:
-  1) 입력값/파일 검증
-  2) AI가 읽기 좋은 분석용 이미지 생성
-  3) Gemini로 현수막/개인정보 영역 감지
-  4) 원본(압축본)을 Storage에 저장
-  5) upload_sources에 메타데이터 저장 후 uploadSourceId 반환
+  1) 입력값(sourcePath 포함) 검증
+  2) Storage에서 원본 이미지 크기 선검사 후 다운로드
+  3) 저장용 WebP 압축본 및 AI 분석용 이미지 병렬 생성
+  4) 압축본을 Storage에 저장, 원본(raw) 파일 삭제
+  5) Gemini로 현수막/개인정보 영역 감지
+  6) upload_sources에 메타데이터 저장 후 uploadSourceId 반환
 */
 
 async function compressSource(input: Buffer): Promise<Buffer> {
@@ -131,6 +132,19 @@ function parseDetectedBannerResponse(raw: string) {
   throw new Error('AI 응답에서 JSON을 파싱할 수 없습니다.')
 }
 
+function normalizeDetectedBannerResponse(input: unknown): unknown {
+  if (!Array.isArray(input)) return input
+  if (input.length === 0) return { banners: [], privacyRegions: [] }
+
+  const first = input[0]
+  if (first && typeof first === 'object' && ('banners' in first || 'privacyRegions' in first)) {
+    return first
+  }
+
+  // 일부 모델이 최상위 배열로 배너 목록만 반환하는 경우를 수용
+  return { banners: input, privacyRegions: [] }
+}
+
 async function buildAnalysisImage(input: Buffer): Promise<Buffer> {
   // AI 분석용 이미지는 JPEG로 별도 생성 (모델이 WebP보다 JPEG을 더 잘 처리하는 것으로 보여서)
   return sharp(input)
@@ -161,7 +175,13 @@ async function detectBanners(imageBuffer: Buffer, mimeType: string): Promise<Mul
   const raw = result.response.text()
 
   // AI 출력(JSON)을 스키마로 검증해 형식 오류를 조기에 잡아냄
-  const parsed = detectedBannerListSchema.parse(parseDetectedBannerResponse(raw))
+  const normalized = normalizeDetectedBannerResponse(parseDetectedBannerResponse(raw))
+  let parsed: ReturnType<typeof detectedBannerListSchema.parse>
+  try {
+    parsed = detectedBannerListSchema.parse(normalized)
+  } catch {
+    throw new Error('AI 응답 형식이 올바르지 않습니다. 다시 시도해 주세요.')
+  }
   const bannerList = parsed.banners
 
   // AI 응답값을 내부 타입으로 정리하고, bbox/신뢰도는 0~1 범위로 보정(clamp) 
@@ -203,32 +223,83 @@ function clamp(v: number, min = 0, max = 1): number {
   return Math.min(max, Math.max(min, v))
 }
 
+function detectSourceMimeTypeFromBuffer(input: Buffer): Promise<string> {
+  return sharp(input)
+    .metadata()
+    .then((meta) => {
+      switch (meta.format) {
+        case 'jpeg':
+          return 'image/jpeg'
+        case 'png':
+          return 'image/png'
+        case 'webp':
+          return 'image/webp'
+        default:
+          throw new Error('지원하지 않는 원본 이미지 형식입니다.')
+      }
+    })
+}
+
 // Fields:
-//   image        File     현수막 사진 (JPG/PNG/WebP, 최대 20MB)
-//   regionText   string   목격 위치 (필수)
-//   observedAt   string   목격 날짜 ISO 8601 (필수)
-//   subjectType  string   주체 유형 (선택)
+//   sourcePath        string   Storage 원본 이미지 경로 (필수)
+//   sourceContentType string   원본 이미지 MIME type (필수)
+//   regionText        string   목격 위치 (필수)
+//   observedAt        string   목격 날짜 ISO 8601 (필수)
+//   subjectType       string   주체 유형 (선택)
 export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse> {
   // 1) 업로드 폼 입력값 검증
-  const { image: imageFile, regionText, observedAt, subjectType } = analyzeBannerInputSchema.parse({
-    image: formData.get('image'),
+  const { sourcePath, sourceContentType, regionText, observedAt, subjectType } = analyzeBannerInputSchema.parse({
+    sourcePath: formData.get('sourcePath'),
+    sourceContentType: formData.get('sourceContentType'),
     regionText: formData.get('regionText'),
     observedAt: formData.get('observedAt'),
-    subjectType: formData.get('subjectType'),
+    subjectType: formData.get('subjectType') ?? undefined,
   })
 
   const observedDate = new Date(observedAt)
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET!
+  const supabase = createAdminClient()
 
-  // 2) 브라우저 File -> Node Buffer 변환
-  const originalBuffer = Buffer.from(await imageFile.arrayBuffer())
+  // 2) Storage에서 원본 이미지 다운로드 (다운로드 전 info()로 크기 선검사)
+  const { data: fileInfo, error: infoError } = await supabase.storage.from(bucket).info(sourcePath)
+  if (infoError || !fileInfo) {
+    throw new Error(`원본 이미지 정보 조회 실패: ${infoError?.message ?? '알 수 없는 오류'}`)
+  }
+  if ((fileInfo.size ?? 0) > MAX_UPLOAD_FILE_SIZE) {
+    throw new Error('이미지 크기는 20MB를 초과할 수 없습니다')
+  }
 
-  // 3) 저장용/분석용 이미지를 병렬로 생성
+  const { data: sourceBlob, error: downloadError } = await supabase.storage
+    .from(bucket)
+    .download(sourcePath)
+
+  if (downloadError || !sourceBlob) {
+    throw new Error(`원본 이미지 다운로드 실패: ${downloadError?.message ?? '알 수 없는 오류'}`)
+  }
+
+  const originalBuffer = Buffer.from(await sourceBlob.arrayBuffer())
+  const detectedSourceContentType = await detectSourceMimeTypeFromBuffer(originalBuffer)
+  if (detectedSourceContentType !== sourceContentType) {
+    throw new Error('업로드 파일 형식 검증에 실패했습니다. 다시 업로드해 주세요.')
+  }
+
+  // 3) 저장용 WebP 압축본 및 AI 분석용 이미지 병렬 생성
   const [sourceBuffer, analysisBuffer] = await Promise.all([
     compressSource(originalBuffer),
     buildAnalysisImage(originalBuffer),
   ])
 
-  // 4) AI 분석 실행 (실패 시 사용자 친화 메시지로 변환)
+  // 4) 압축본을 Storage에 저장, 원본(raw) 파일은 fire-and-forget으로 삭제
+  const compressedPath = sourcePath.replace(/^sources\/raw\/(.+)\.[^.]+$/, 'sources/$1.webp')
+  const { error: uploadError } = await supabase.storage
+    .from(bucket)
+    .upload(compressedPath, sourceBuffer, { contentType: 'image/webp', upsert: false })
+  if (uploadError) {
+    throw new Error(`이미지 압축본 업로드 실패: ${uploadError.message}`)
+  }
+  supabase.storage.from(bucket).remove([sourcePath]).catch(() => {})
+
+  // 5) AI 분석 실행 (실패 시 사용자 친화 메시지로 변환)
   let analysis: MultiBannerAnalysis
   try {
     analysis = await detectBanners(analysisBuffer, 'image/jpeg')
@@ -240,31 +311,17 @@ export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse
   const enableSecondPass = process.env.ENABLE_ANALYZE_SECOND_PASS === 'true'
   if (enableSecondPass && analysis.candidates.length === 0) {
     try {
-      analysis = await detectBanners(sourceBuffer, 'image/webp')
+      analysis = await detectBanners(originalBuffer, detectedSourceContentType)
     } catch (error) {
       throw toFriendlyAnalyzeError(error)
     }
   }
 
-  const sourceId = randomUUID()
-  const sourcePath = `sources/${sourceId}.webp`
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET!
-
-  // 6) 원본(압축본) 이미지를 Storage에 저장
-  const supabase = createAdminClient()
-  const { error: uploadError } = await supabase.storage
-    .from(bucket)
-    .upload(sourcePath, sourceBuffer, { contentType: 'image/webp', upsert: false })
-
-  if (uploadError) {
-    throw new Error(`원본 이미지 업로드 실패: ${uploadError.message}`)
-  }
-
-  // 7) upload_sources에 원본 경로/위치/날짜/개인정보 영역 메타데이터 저장
+  // 6) upload_sources에 압축본 경로/위치/날짜/개인정보 영역 메타데이터 저장
   const [uploadSource] = await db
     .insert(uploadSources)
     .values({
-      sourceImageUrl: sourcePath,
+      sourceImageUrl: compressedPath,
       regionText,
       observedAt: observedDate,
       subjectType,
@@ -272,7 +329,7 @@ export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse
     })
     .returning()
 
-  // 8) 다음 단계(commit API)에서 사용할 식별자와 분석 결과 반환
+  // 7) 다음 단계(commit API)에서 사용할 식별자와 분석 결과 반환
   return {
     uploadSourceId: uploadSource.id,
     candidates: analysis.candidates,

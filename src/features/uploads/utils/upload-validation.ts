@@ -36,6 +36,15 @@ export function toFriendlyAnalyzeErrorMessage(err: unknown): string {
     message.includes('An error occurred in the Server Components render') ||
     message.includes('An unexpected response was received from the server.')
 
+  const isPayloadTooLargeError =
+    message.includes('FUNCTION_PAYLOAD_TOO_LARGE') ||
+    message.includes('Request Entity Too Large') ||
+    message.includes('413')
+
+  if (isPayloadTooLargeError) {
+    return '업로드 파일이 너무 큽니다. 20MB 이하 이미지로 다시 시도해 주세요.'
+  }
+
   if (isMaskedServerActionError) {
     return '서버 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'
   }
