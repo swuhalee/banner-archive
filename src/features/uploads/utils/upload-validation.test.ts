@@ -44,6 +44,13 @@ describe('toFriendlyAnalyzeErrorMessage', () => {
     )
   })
 
+  it('413 payload 초과 오류는 용량 안내 문구로 변환한다', () => {
+    const error = new Error('FUNCTION_PAYLOAD_TOO_LARGE (413)')
+    expect(toFriendlyAnalyzeErrorMessage(error)).toBe(
+      '업로드 파일이 너무 큽니다. 20MB 이하 이미지로 다시 시도해 주세요.',
+    )
+  })
+
   it('일반 에러 메시지는 그대로 유지한다', () => {
     const error = new Error('AI 분석 요청 한도를 초과했습니다')
     expect(toFriendlyAnalyzeErrorMessage(error)).toBe('AI 분석 요청 한도를 초과했습니다')

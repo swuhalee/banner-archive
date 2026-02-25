@@ -14,6 +14,7 @@ import {
   getUploadFileValidationError,
   toFriendlyAnalyzeErrorMessage,
 } from "@/features/uploads/utils/upload-validation";
+import { uploadSourceForAnalysis } from "@/features/uploads/utils/source-upload";
 import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from "@/lib/constants";
 
 type EditableCandidate = {
@@ -152,15 +153,13 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
   }
 
   // 분석 요청
-  function handleAnalyze() {
+  async function handleAnalyze() {
     if (!selectedFile || !regionText || !observedAt) return;
 
-    const formData = new FormData();
-    formData.append("image", selectedFile);
-    formData.append("regionText", regionText);
-    formData.append("observedAt", observedAt);
-    if (subjectType) formData.append("subjectType", subjectType);
+    let sourcePath = "";
+    let elapsed = 0;
 
+    const formData = new FormData();
     setUiState((prev) => ({
       ...prev,
       step: "analyzing",
@@ -168,15 +167,36 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
       errorMessage: null,
     }));
 
-    // 분석 progress
-    let elapsed = 0;
-    analyzeTimerRef.current = setInterval(() => {
-      elapsed += 200;
+    try {
+      const result = await uploadSourceForAnalysis(selectedFile, (uploadPercent) => {
+        const mapped = Math.min(45, Math.round(uploadPercent * 0.45));
+        setUiState((prev) => ({ ...prev, analyzeProgress: mapped }));
+      });
+      sourcePath = result.sourcePath;
+    } catch (err) {
       setUiState((prev) => ({
         ...prev,
-        analyzeProgress: Math.min(89, Math.round(90 * (1 - Math.exp(-elapsed / 12000)))),
+        errorMessage: err instanceof Error ? err.message : "원본 업로드에 실패했습니다",
+        step: "form",
+      }));
+      return;
+    }
+
+    setUiState((prev) => ({ ...prev, analyzeProgress: 45 }));
+    analyzeTimerRef.current = setInterval(() => {
+      elapsed += 200;
+      const fromAnalysis = Math.round(45 * (1 - Math.exp(-elapsed / 12000)));
+      setUiState((prev) => ({
+        ...prev,
+        analyzeProgress: Math.min(89, 45 + fromAnalysis),
       }));
     }, 200);
+
+    formData.append("sourcePath", sourcePath);
+    formData.append("sourceContentType", selectedFile.type);
+    formData.append("regionText", regionText);
+    formData.append("observedAt", observedAt);
+    if (subjectType) formData.append("subjectType", subjectType);
 
     analyzeMutation.mutate(formData, {
       onSuccess: (data) => {
