@@ -1,7 +1,7 @@
 import { z } from 'zod'
+import { ALLOWED_UPLOAD_MIME_TYPES, MAX_UPLOAD_FILE_SIZE } from '@/features/uploads/utils/upload-validation'
 
-export const ALLOWED_UPLOAD_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-export const MAX_UPLOAD_FILE_SIZE = 20 * 1024 * 1024 // 20MB
+export { ALLOWED_UPLOAD_MIME_TYPES, MAX_UPLOAD_FILE_SIZE }
 
 const optionalTrimmedStringSchema = z
   .string()
@@ -20,7 +20,7 @@ export const analyzeBannerInputSchema = z.object({
   image: z
     .instanceof(File, { message: 'image 파일이 필요합니다' })
     .refine((file) => ALLOWED_UPLOAD_MIME_TYPES.includes(file.type), {
-      message: 'JPG, PNG, WebP 이미지만 업로드 가능합니다',
+      message: 'JPG, PNG, WebP 이미지만 업로드 가능합니다 (HEIC/HEIF 미지원)',
     })
     .refine((file) => file.size <= MAX_UPLOAD_FILE_SIZE, {
       message: '이미지 크기는 20MB를 초과할 수 없습니다',

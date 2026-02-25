@@ -1,6 +1,8 @@
 import { UploadDialog } from "@/features/uploads";
 import { sanitizeReturnPath } from "@/lib/return-path";
 
+export const maxDuration = 60;
+
 type Props = {
   searchParams: Promise<{ from?: string }>;
 };

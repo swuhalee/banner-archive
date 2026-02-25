@@ -5,6 +5,11 @@ vi.mock('@/features/uploads', () => ({
 }))
 
 describe('업로드 페이지', () => {
+  it('maxDuration을 60초로 설정한다', async () => {
+    const mod = await import('./page')
+    expect(mod.maxDuration).toBe(60)
+  })
+
   it('UploadDialog를 페이지 모드(asModal=false)로 렌더한다', async () => {
     const { default: UploadPage } = await import('./page')
     const element = UploadPage()

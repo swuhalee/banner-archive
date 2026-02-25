@@ -10,6 +10,10 @@ import {
   commitBannerWithProgress,
 } from "@/features/banners";
 import type { BBox, PrivacyRegion, RejectedDuplicate, UploadCandidate } from "@/features/uploads/types/upload";
+import {
+  getUploadFileValidationError,
+  toFriendlyAnalyzeErrorMessage,
+} from "@/features/uploads/utils/upload-validation";
 import { BANNER_SUBJECT_TYPES, type BannerSubjectType } from "@/lib/constants";
 
 type EditableCandidate = {
@@ -98,6 +102,15 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
 
   // 파일 선택
   function handleFileSelect(file: File) {
+    const validationError = getUploadFileValidationError(file);
+    if (validationError) {
+      setUiState((prev) => ({
+        ...prev,
+        errorMessage: validationError,
+      }));
+      return;
+    }
+
     setFormState((prev) => {
       if (prev.previewUrl) URL.revokeObjectURL(prev.previewUrl);
       return {
@@ -199,7 +212,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
         }
         setUiState((prev) => ({
           ...prev,
-          errorMessage: err instanceof Error ? err.message : "분석에 실패했습니다",
+          errorMessage: toFriendlyAnalyzeErrorMessage(err),
           step: "form",
         }));
       },
@@ -477,7 +490,7 @@ export default function UploadDialog({ closeHref = "/", asModal = true }: Upload
               className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
             />
-            <p className="mt-2 text-[13px] text-[var(--text-muted)]">JPG, JPEG, PNG · 최대 20MB</p>
+            <p className="mt-2 text-[13px] text-[var(--text-muted)]">JPG, JPEG, PNG, WebP · 최대 20MB (HEIC 불가)</p>
           </article>
 
           {/* 정보 입력 폼 */}
