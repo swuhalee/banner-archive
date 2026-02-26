@@ -1,15 +1,8 @@
 import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/server/lib/supabase/admin'
-import { ALLOWED_UPLOAD_MIME_TYPES, MAX_UPLOAD_FILE_SIZE } from '@/features/uploads/utils/upload-validation'
+import { MAX_UPLOAD_FILE_SIZE } from '@/features/uploads/utils/upload-validation'
 import { sourceUploadUrlRateLimiter } from '@/server/lib/rate-limit'
-
-const EXTENSION_BY_MIME_TYPE: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/jpg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-}
 
 function getClientIp(request: NextRequest): string {
   const forwardedFor = request.headers.get('x-forwarded-for')
@@ -34,7 +27,7 @@ export async function POST(request: NextRequest) {
   }
 
   const contentType = body.contentType?.trim().toLowerCase()
-  if (!contentType || !ALLOWED_UPLOAD_MIME_TYPES.includes(contentType)) {
+  if (contentType !== 'image/webp') {
     return NextResponse.json({ error: '지원하지 않는 파일 형식입니다' }, { status: 400 })
   }
 
@@ -46,13 +39,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '이미지 크기는 20MB를 초과할 수 없습니다' }, { status: 400 })
   }
 
-  const ext = EXTENSION_BY_MIME_TYPE[contentType]
-  if (!ext) {
-    return NextResponse.json({ error: '지원하지 않는 파일 형식입니다' }, { status: 400 })
-  }
-
   const bucket = process.env.SUPABASE_STORAGE_BUCKET!
-  const path = `sources/raw/${randomUUID()}.${ext}`
+  const path = `sources/raw/${randomUUID()}.webp`
 
   const supabase = createAdminClient()
   const { data, error } = await supabase.storage.from(bucket).createSignedUploadUrl(path)

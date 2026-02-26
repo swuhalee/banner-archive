@@ -36,7 +36,7 @@ describe('POST /api/uploads/source-upload-url', () => {
   it('contentLength가 없으면 400을 반환한다', async () => {
     const { POST } = await import('./route')
     const req = {
-      json: async () => ({ contentType: 'image/png' }),
+      json: async () => ({ contentType: 'image/webp' }),
     } as unknown as Request
 
     const res = await POST(req as never)
@@ -51,7 +51,7 @@ describe('POST /api/uploads/source-upload-url', () => {
 
     const { POST } = await import('./route')
     const req = {
-      json: async () => ({ contentType: 'image/png', contentLength: 1024 }),
+      json: async () => ({ contentType: 'image/webp', contentLength: 1024 }),
     } as unknown as Request
 
     const res = await POST(req as never)

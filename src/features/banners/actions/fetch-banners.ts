@@ -11,15 +11,16 @@ import {
 } from '@/features/banners/schemas/banner-schema'
 
 export async function fetchBanners(params: BannerListParams = {}): Promise<BannerListResponse> {
-  const parsedParams = bannerListParamsSchema.parse(params)
-  const q = parsedParams.q || null
-  const from = parsedParams.from || null
-  const to = parsedParams.to || null
-  const hashtag = parsedParams.hashtag || null
-  const region = parsedParams.region || null
-  const subjectType = parsedParams.subjectType || null
-  const page = parsedParams.page
-  const limit = parsedParams.limit
+  const {
+    q = null,
+    from = null,
+    to = null,
+    hashtag = null,
+    region = null,
+    subjectType = null,
+    page,
+    limit,
+  } = bannerListParamsSchema.parse(params)
   const offset = (page - 1) * limit
 
   const fromDate = from ? new Date(from) : null

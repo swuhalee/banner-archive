@@ -1,28 +1,16 @@
 export const ALLOWED_UPLOAD_MIME_TYPES = [
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/webp',
-]
-
-export const UNSUPPORTED_UPLOAD_MIME_TYPES = [
-  'image/heic',
-  'image/heif',
+  'image/*',
 ]
 
 export const MAX_UPLOAD_FILE_SIZE = 20 * 1024 * 1024
 
 export function getUploadFileValidationError(file: File): string | null {
-  if (UNSUPPORTED_UPLOAD_MIME_TYPES.includes(file.type)) {
-    return 'HEIC/HEIF 이미지는 지원하지 않습니다. JPG/PNG/WebP 형식으로 변환 후 업로드해 주세요.'
-  }
+  const mimeType = file.type.trim().toLowerCase()
+  const isImage = mimeType.startsWith('image/')
+  const isGif = mimeType === 'image/gif'
 
-  if (!ALLOWED_UPLOAD_MIME_TYPES.includes(file.type)) {
-    return 'JPG, PNG, WebP 이미지만 업로드 가능합니다.'
-  }
-
-  if (file.size > MAX_UPLOAD_FILE_SIZE) {
-    return '이미지 크기는 20MB를 초과할 수 없습니다.'
+  if (!isImage || isGif) {
+    return 'GIF를 제외한 이미지 파일만 업로드 가능합니다.'
   }
 
   return null

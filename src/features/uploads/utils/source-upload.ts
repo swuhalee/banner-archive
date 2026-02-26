@@ -1,3 +1,6 @@
+import { convertToWebP } from './convert-to-webp'
+import { MAX_UPLOAD_FILE_SIZE } from './upload-validation'
+
 type SourceUploadTicket = {
   bucket: string
   path: string
@@ -41,12 +44,17 @@ export async function uploadSourceForAnalysis(
   file: File,
   onProgress?: (percent: number) => void
 ): Promise<{ sourcePath: string }> {
+  const webpFile = await convertToWebP(file)
+  if (webpFile.size > MAX_UPLOAD_FILE_SIZE) {
+    throw new Error('변환 후에도 이미지 크기가 20MB를 초과합니다. 더 작은 이미지를 사용해 주세요.')
+  }
+
   const initRes = await fetch('/api/uploads/source-upload-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      contentType: file.type,
-      contentLength: file.size,
+      contentType: webpFile.type,
+      contentLength: webpFile.size,
     }),
   })
 
@@ -58,6 +66,6 @@ export async function uploadSourceForAnalysis(
   const ticket = (await initRes.json()) as SourceUploadTicket
   if (!ticket.signedUrl) throw new Error('원본 업로드를 진행할 수 없습니다.')
 
-  await uploadToSignedUrl(ticket.signedUrl, file, onProgress)
+  await uploadToSignedUrl(ticket.signedUrl, webpFile, onProgress)
   return { sourcePath: ticket.path }
 }
