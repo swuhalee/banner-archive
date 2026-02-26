@@ -11,6 +11,8 @@ export { SkeletonPhotoCard } from './components/skeleton-photo-card'
 export { submitAppeal as submitAppealMutation, type SubmitAppealParams } from './queries/appeals-queries'
 export {
   bannerKeys,
+  bannerListQueryOptions,
+  bannerDetailQueryOptions,
   commitBannerWithProgress,
   useAnalyzeBanner,
   useBanner,
