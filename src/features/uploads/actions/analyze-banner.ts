@@ -7,7 +7,6 @@ import type { BBox, UploadCandidate, AnalyzeResponse, PrivacyRegion } from '@/fe
 import {
   analyzeBannerInputSchema,
   detectedBannerListSchema,
-  MAX_UPLOAD_FILE_SIZE,
 } from '@/features/uploads/schemas/upload-schema'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import sharp from 'sharp'
@@ -16,26 +15,29 @@ import sharp from 'sharp'
   이 파일은 업로드 및 분석 단계를 담당하는 Server Action
   흐름:
   1) 입력값(sourcePath 포함) 검증
-  2) Storage에서 원본 이미지 크기 선검사 후 다운로드
+  2) Storage에서 원본 이미지 다운로드
   3) 저장용 WebP 압축본 및 AI 분석용 이미지 병렬 생성
   4) 압축본을 Storage에 저장, 원본(raw) 파일 삭제
-  5) Gemini로 현수막/개인정보 영역 감지
+  5) Gemini로 현수막/개인정보 영역 감지 (필요 시 2차 재시도)
   6) upload_sources에 메타데이터 저장 후 uploadSourceId 반환
 */
 
-async function compressSource(input: Buffer): Promise<Buffer> {
-  // 저장용 원본 이미지를 너무 크지 않게 압축(WebP)
-  return sharp(input)
-    .rotate()
-    .resize({ width: 4800, fit: 'inside', withoutEnlargement: true })
-    .webp({ quality: 90, effort: 4 })
-    .toBuffer()
+// ─── 유틸 ───────────────────────────────────────────────────────────────────
+
+// 숫자를 min~max 범위 안으로 고정 (이상치 방어)
+// AI가 bbox 좌표나 신뢰도를 0~1 범위 밖으로 출력하는 경우가 종종 있어 사용
+function clamp(v: number, min = 0, max = 1): number {
+  return Math.min(max, Math.max(min, v))
 }
+
+// ─── 타입 ────────────────────────────────────────────────────────────────────
 
 type MultiBannerAnalysis = {
   candidates: UploadCandidate[]
   privacyRegions: PrivacyRegion[]
 }
+
+// ─── 에러 처리 ───────────────────────────────────────────────────────────────
 
 // Gemini 에러 메시지를 사용자가 이해하기 쉬운 문구로 교체
 function toFriendlyAnalyzeError(error: unknown): Error {
@@ -67,41 +69,27 @@ function toFriendlyAnalyzeError(error: unknown): Error {
   )
 }
 
-const DETECTION_PROMPT = `이 사진에서 보이는 모든 현수막을 감지하고, 개인정보 보호 대상(얼굴·번호판)도 감지하여 아래 JSON 형식으로만 응답하세요.
+// ─── 이미지 처리 ─────────────────────────────────────────────────────────────
 
-{
-  "banners": [
-    {
-      "tempId": "banner_0",
-      "title": "현수막의 핵심 슬로건 또는 주요 문구 (없거나 판독 불가면 null)",
-      "hashtags": ["키워드1", "키워드2"],
-      "subjectType": "정치인 또는 정당 또는 기타 또는 null",
-      "bbox": { "x": 0.10, "y": 0.05, "width": 0.80, "height": 0.60 },
-      "confidence": 0.95
-    }
-  ],
-  "privacyRegions": [
-    {
-      "type": "face",
-      "bbox": { "x": 0.10, "y": 0.05, "width": 0.08, "height": 0.12 }
-    },
-    {
-      "type": "licensePlate",
-      "bbox": { "x": 0.45, "y": 0.70, "width": 0.15, "height": 0.05 }
-    }
-  ]
+async function compressSource(input: Buffer): Promise<Buffer> {
+  // 저장용 원본 이미지를 너무 크지 않게 압축(WebP)
+  return sharp(input)
+    .rotate()
+    .resize({ width: 4800, fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 90, effort: 4 })
+    .toBuffer()
 }
 
-규칙:
-- 멀리 작게 보이는 현수막도 놓치지 말고 감지
-- bbox는 이미지 전체 크기 대비 비율(0.0~1.0)로 표현. x·y는 좌상단, width·height는 크기
-- tempId는 "banner_0", "banner_1" 순으로 부여
-- title: 현수막에서 가장 중심이 되는 한 문장 또는 슬로건
-- hashtags: 주제, 주체, 요구사항, 장소를 나타내는 한국어 키워드 최대 12개, # 기호 없이
-- subjectType: "정치인", "정당", "기타", null 중 하나
-- confidence: 현수막 감지 신뢰도 (0.0~1.0)
-- privacyRegions.type: "face" (사람 얼굴) 또는 "licensePlate" (한국 차량 번호판)
-- 현수막이 없으면: { "banners": [], "privacyRegions": [] }`
+async function buildAnalysisImage(input: Buffer): Promise<Buffer> {
+  // AI 분석용 이미지는 JPEG로 별도 생성 (모델이 WebP보다 JPEG를 더 잘 처리하는 것으로 보여서)
+  return sharp(input)
+    .rotate()
+    .resize({ width: 2560, fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 92, mozjpeg: true })
+    .toBuffer()
+}
+
+// ─── AI 응답 파싱 ─────────────────────────────────────────────────────────────
 
 function parseDetectedBannerResponse(raw: string) {
   // AI 응답에 공백/설명 텍스트가 섞일 수 있어 단계적으로 JSON을 추출
@@ -145,17 +133,48 @@ function normalizeDetectedBannerResponse(input: unknown): unknown {
   return { banners: input, privacyRegions: [] }
 }
 
-async function buildAnalysisImage(input: Buffer): Promise<Buffer> {
-  // AI 분석용 이미지는 JPEG로 별도 생성 (모델이 WebP보다 JPEG을 더 잘 처리하는 것으로 보여서)
-  return sharp(input)
-    .rotate()
-    .resize({ width: 2560, fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 92, mozjpeg: true })
-    .toBuffer()
+// ─── AI 감지 ─────────────────────────────────────────────────────────────────
+
+// 모듈 레벨에서 한 번만 초기화 (요청마다 재생성 불필요)
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+
+const DETECTION_PROMPT = `이 사진에서 보이는 모든 현수막을 감지하고, 개인정보 보호 대상(얼굴·번호판)도 감지하여 아래 JSON 형식으로만 응답하세요.
+
+{
+  "banners": [
+    {
+      "tempId": "banner_0",
+      "title": "현수막의 핵심 슬로건 또는 주요 문구 (없거나 판독 불가면 null)",
+      "hashtags": ["키워드1", "키워드2"],
+      "subjectType": "정치인 또는 정당 또는 기타 또는 null",
+      "bbox": { "x": 0.10, "y": 0.05, "width": 0.80, "height": 0.60 },
+      "confidence": 0.95
+    }
+  ],
+  "privacyRegions": [
+    {
+      "type": "face",
+      "bbox": { "x": 0.10, "y": 0.05, "width": 0.08, "height": 0.12 }
+    },
+    {
+      "type": "licensePlate",
+      "bbox": { "x": 0.45, "y": 0.70, "width": 0.15, "height": 0.05 }
+    }
+  ]
 }
 
+규칙:
+- 멀리 작게 보이는 현수막도 놓치지 말고 감지
+- bbox는 이미지 전체 크기 대비 비율(0.0~1.0)로 표현. x·y는 좌상단, width·height는 크기
+- tempId는 "banner_0", "banner_1" 순으로 부여
+- title: 현수막에서 가장 중심이 되는 한 문장 또는 슬로건
+- hashtags: 주제, 주체, 요구사항, 장소를 나타내는 한국어 키워드 최대 12개, # 기호 없이
+- subjectType: "정치인", "정당", "기타", null 중 하나
+- confidence: 현수막 감지 신뢰도 (0.0~1.0)
+- privacyRegions.type: "face" (사람 얼굴) 또는 "licensePlate" (한국 차량 번호판)
+- 현수막이 없으면: { "banners": [], "privacyRegions": [] }`
+
 async function detectBanners(imageBuffer: Buffer, mimeType: string): Promise<MultiBannerAnalysis> {
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
   const model = genAI.getGenerativeModel({
     model: process.env.GEMINI_MODEL ?? 'gemini-3-flash-preview',
     generationConfig: {
@@ -184,7 +203,7 @@ async function detectBanners(imageBuffer: Buffer, mimeType: string): Promise<Mul
   }
   const bannerList = parsed.banners
 
-  // AI 응답값을 내부 타입으로 정리하고, bbox/신뢰도는 0~1 범위로 보정(clamp) 
+  // AI 응답값을 내부 타입으로 정리하고, bbox/신뢰도는 0~1 범위로 보정(clamp)
   const candidates: UploadCandidate[] = bannerList.map((b, idx) => {
     const bbox = b.bbox ?? {}
     const parsedBbox: BBox = {
@@ -217,40 +236,17 @@ async function detectBanners(imageBuffer: Buffer, mimeType: string): Promise<Mul
   return { candidates, privacyRegions }
 }
 
-// 숫자를 min~max 범위 안으로 고정 (이상치 방어)
-// 이상치: AI가 bbox 좌표나 신뢰도를 0~1 범위를 벗어나게 출력하는 경우가 종종 있어서, 이를 방지하기 위한 유틸 함수
-function clamp(v: number, min = 0, max = 1): number {
-  return Math.min(max, Math.max(min, v))
-}
-
-function detectSourceMimeTypeFromBuffer(input: Buffer): Promise<string> {
-  return sharp(input)
-    .metadata()
-    .then((meta) => {
-      switch (meta.format) {
-        case 'jpeg':
-          return 'image/jpeg'
-        case 'png':
-          return 'image/png'
-        case 'webp':
-          return 'image/webp'
-        default:
-          throw new Error('지원하지 않는 원본 이미지 형식입니다.')
-      }
-    })
-}
+// ─── 메인 Server Action ───────────────────────────────────────────────────────
 
 // Fields:
-//   sourcePath        string   Storage 원본 이미지 경로 (필수)
-//   sourceContentType string   원본 이미지 MIME type (필수)
-//   regionText        string   목격 위치 (필수)
-//   observedAt        string   목격 날짜 ISO 8601 (필수)
-//   subjectType       string   주체 유형 (선택)
+//   sourcePath   string   Storage 원본 WebP 이미지 경로 (필수)
+//   regionText   string   목격 위치 (필수)
+//   observedAt   string   목격 날짜 ISO 8601 (필수)
+//   subjectType  string   주체 유형 (선택)
 export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse> {
   // 1) 업로드 폼 입력값 검증
-  const { sourcePath, sourceContentType, regionText, observedAt, subjectType } = analyzeBannerInputSchema.parse({
+  const { sourcePath, regionText, observedAt, subjectType } = analyzeBannerInputSchema.parse({
     sourcePath: formData.get('sourcePath'),
-    sourceContentType: formData.get('sourceContentType'),
     regionText: formData.get('regionText'),
     observedAt: formData.get('observedAt'),
     subjectType: formData.get('subjectType') ?? undefined,
@@ -260,15 +256,7 @@ export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse
   const bucket = process.env.SUPABASE_STORAGE_BUCKET!
   const supabase = createAdminClient()
 
-  // 2) Storage에서 원본 이미지 다운로드 (다운로드 전 info()로 크기 선검사)
-  const { data: fileInfo, error: infoError } = await supabase.storage.from(bucket).info(sourcePath)
-  if (infoError || !fileInfo) {
-    throw new Error(`원본 이미지 정보 조회 실패: ${infoError?.message ?? '알 수 없는 오류'}`)
-  }
-  if ((fileInfo.size ?? 0) > MAX_UPLOAD_FILE_SIZE) {
-    throw new Error('이미지 크기는 20MB를 초과할 수 없습니다')
-  }
-
+  // 2) Storage에서 원본 WebP 다운로드
   const { data: sourceBlob, error: downloadError } = await supabase.storage
     .from(bucket)
     .download(sourcePath)
@@ -278,10 +266,6 @@ export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse
   }
 
   const originalBuffer = Buffer.from(await sourceBlob.arrayBuffer())
-  const detectedSourceContentType = await detectSourceMimeTypeFromBuffer(originalBuffer)
-  if (detectedSourceContentType !== sourceContentType) {
-    throw new Error('업로드 파일 형식 검증에 실패했습니다. 다시 업로드해 주세요.')
-  }
 
   // 3) 저장용 WebP 압축본 및 AI 분석용 이미지 병렬 생성
   const [sourceBuffer, analysisBuffer] = await Promise.all([
@@ -307,11 +291,11 @@ export async function analyzeBanner(formData: FormData): Promise<AnalyzeResponse
     throw toFriendlyAnalyzeError(error)
   }
 
-  // 5) 선택적 2차 분석: 1차에서 후보가 0개일 때만 재시도 --> 기본은 OFF(쿼터/비용 증가 방지)
+  // 5-1) 선택적 2차 분석: 1차에서 후보가 0개일 때만 재시도 → 기본은 OFF(쿼터/비용 증가 방지)
   const enableSecondPass = process.env.ENABLE_ANALYZE_SECOND_PASS === 'true'
   if (enableSecondPass && analysis.candidates.length === 0) {
     try {
-      analysis = await detectBanners(originalBuffer, detectedSourceContentType)
+      analysis = await detectBanners(originalBuffer, 'image/webp')
     } catch (error) {
       throw toFriendlyAnalyzeError(error)
     }

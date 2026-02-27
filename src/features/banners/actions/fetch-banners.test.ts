@@ -62,8 +62,8 @@ describe('fetchBanners', () => {
           {
             id: 'img-1',
             bannerId: 'banner-1',
-            maskedImageUrl: 'thumb.webp',
-            originalImageUrl: 'detail.webp',
+            maskedImageUrl: 'masked.webp',
+            originalImageUrl: 'original.webp',
             maskingStatus: 'success',
             maskingMetadata: null,
             phash: null,
@@ -95,8 +95,8 @@ describe('fetchBanners', () => {
     })
     expect(result.data).toHaveLength(1)
     expect(result.data[0].images).toHaveLength(1)
-    expect(result.data[0].images?.[0].maskedImageUrl).toBe('resolved:thumb.webp')
-    expect(result.data[0].images?.[0].originalImageUrl).toBe('resolved:detail.webp')
+    expect(result.data[0].images?.[0].maskedImageUrl).toBe('resolved:masked.webp')
+    expect(result.data[0].images?.[0].originalImageUrl).toBe('resolved:original.webp')
     expect(result.data[0].firstSeenAt).toBe(now.toISOString())
   })
 

@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { queryOptions, useMutation, useQuery } from '@tanstack/react-query'
 import { fetchBanners } from '@/features/banners/actions/fetch-banners'
 import { fetchBanner } from '@/features/banners/actions/fetch-banner'
 import { analyzeBanner } from '@/features/uploads/actions/analyze-banner'
@@ -55,21 +55,28 @@ export async function commitBannerWithProgress(
   throw new Error('스트림이 예상치 않게 종료되었습니다')
 }
 
-export function useBanners(params: BannerListParams = {}) {
-  return useQuery({
+export const bannerListQueryOptions = (params: BannerListParams = {}) =>
+  queryOptions({
     queryKey: bannerKeys.list(params),
     queryFn: () => fetchBanners(params),
   })
-}
 
-export function useBanner(id: string) {
-  return useQuery({
+// 서버 컴포넌트에서 prefetchQuery(), 클라이언트에서 useQuery() 모두에 전달 가능
+export const bannerDetailQueryOptions = (id: string) =>
+  queryOptions({
     queryKey: bannerKeys.detail(id),
     queryFn: () => fetchBanner(id),
     enabled: Boolean(id),
     // 상세 데이터는 목록보다 변경이 드물기에 캐시를 더 길게 유지
     staleTime: 60 * 1000,
   })
+
+export function useBanners(params: BannerListParams = {}) {
+  return useQuery(bannerListQueryOptions(params))
+}
+
+export function useBanner(id: string) {
+  return useQuery(bannerDetailQueryOptions(id))
 }
 
 export function useAnalyzeBanner() {

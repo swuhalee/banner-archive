@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const { convertToWebPMock } = vi.hoisted(() => ({
+  convertToWebPMock: vi.fn(),
+}))
+
+vi.mock('./convert-to-webp', () => ({
+  convertToWebP: convertToWebPMock,
+}))
+
 class MockXMLHttpRequest {
   static statusToReturn = 200
   upload = { onprogress: null as null | ((event: ProgressEvent) => void) }
@@ -18,6 +26,7 @@ class MockXMLHttpRequest {
 describe('uploadSourceForAnalysis', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    convertToWebPMock.mockResolvedValue(new File([new Uint8Array(999)], 'a.webp', { type: 'image/webp' }))
     MockXMLHttpRequest.statusToReturn = 200
     vi.stubGlobal('XMLHttpRequest', MockXMLHttpRequest as unknown as typeof XMLHttpRequest)
   })
@@ -51,14 +60,14 @@ describe('uploadSourceForAnalysis', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const { uploadSourceForAnalysis } = await import('./source-upload')
-    const file = new File([new Uint8Array(1234)], 'a.png', { type: 'image/png' })
+    const file = new File([new Uint8Array(1234)], 'a.avif', { type: 'image/avif' })
     await uploadSourceForAnalysis(file)
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/uploads/source-upload-url',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ contentType: 'image/png', contentLength: 1234 }),
+        body: JSON.stringify({ contentType: 'image/webp', contentLength: 999 }),
       }),
     )
   })
@@ -80,12 +89,26 @@ describe('uploadSourceForAnalysis', () => {
 
     const { uploadSourceForAnalysis } = await import('./source-upload')
     const result = await uploadSourceForAnalysis(
-      new File(['x'], 'a.png', { type: 'image/png' }),
+      new File(['x'], 'a.tiff', { type: 'image/tiff' }),
       onProgress,
     )
 
     expect(onProgress).toHaveBeenCalledWith(50)
     expect(onProgress).toHaveBeenCalledWith(100)
     expect(result).toEqual({ sourcePath: 'sources/raw/a.png' })
+  })
+
+  it('변환 결과가 20MB를 초과하면 업로드를 중단한다', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    convertToWebPMock.mockResolvedValue(
+      new File([new Uint8Array(20 * 1024 * 1024 + 1)], 'too-large.webp', { type: 'image/webp' }),
+    )
+
+    const { uploadSourceForAnalysis } = await import('./source-upload')
+    await expect(
+      uploadSourceForAnalysis(new File(['x'], 'a.jpg', { type: 'image/jpeg' })),
+    ).rejects.toThrow('변환 후에도 이미지 크기가 20MB를 초과합니다. 더 작은 이미지를 사용해 주세요.')
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

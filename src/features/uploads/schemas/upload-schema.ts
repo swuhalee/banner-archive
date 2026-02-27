@@ -21,14 +21,8 @@ export const analyzeBannerInputSchema = z.object({
     .string()
     .trim()
     .min(1, 'sourcePath는 필수입니다')
-    .refine((value) => /^sources\/raw\/[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\.(jpg|png|webp)$/i.test(value), {
+    .refine((value) => /^sources\/raw\/[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\.webp$/i.test(value), {
       message: 'sourcePath 형식이 올바르지 않습니다',
-    }),
-  sourceContentType: z
-    .string()
-    .trim()
-    .refine((value) => ALLOWED_UPLOAD_MIME_TYPES.includes(value), {
-      message: 'JPG, PNG, WebP 이미지만 업로드 가능합니다 (HEIC/HEIF 미지원)',
     }),
   regionText: z.string().trim().min(1, 'regionText는 필수입니다'),
   observedAt: requiredDateStringSchema,

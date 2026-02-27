@@ -100,8 +100,7 @@ describe('analyzeBanner', () => {
     downloadMock.mockResolvedValue({ data: new Blob([image], { type: 'image/png' }), error: null })
 
     const formData = new FormData()
-    formData.append('sourcePath', 'sources/raw/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.png')
-    formData.append('sourceContentType', 'image/png')
+    formData.append('sourcePath', 'sources/raw/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.webp')
     formData.append('regionText', '서울 강남구')
     formData.append('observedAt', '2026-02-23T00:00:00.000Z')
     formData.append('subjectType', '정당')
@@ -129,8 +128,7 @@ describe('analyzeBanner', () => {
     downloadMock.mockResolvedValue({ data: new Blob([image], { type: 'image/png' }), error: null })
 
     const formData = new FormData()
-    formData.append('sourcePath', 'sources/raw/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.png')
-    formData.append('sourceContentType', 'image/png')
+    formData.append('sourcePath', 'sources/raw/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.webp')
     formData.append('regionText', '서울 강남구')
     formData.append('observedAt', '2026-02-23T00:00:00.000Z')
     formData.append('subjectType', '')
@@ -142,7 +140,7 @@ describe('analyzeBanner', () => {
     )
   })
 
-  it('sourceContentType이 원본 형식과 다르면 거부한다', async () => {
+  it('sourcePath가 webp 형식이 아니면 거부한다', async () => {
     const image = await sharp({
       create: { width: 16, height: 16, channels: 3, background: { r: 200, g: 200, b: 200 } },
     })
@@ -152,13 +150,12 @@ describe('analyzeBanner', () => {
 
     const formData = new FormData()
     formData.append('sourcePath', 'sources/raw/cccccccc-cccc-4ccc-8ccc-cccccccccccc.png')
-    formData.append('sourceContentType', 'image/jpeg')
     formData.append('regionText', '서울 강남구')
     formData.append('observedAt', '2026-02-23T00:00:00.000Z')
     formData.append('subjectType', '정당')
 
     const { analyzeBanner } = await import('./analyze-banner')
-    await expect(analyzeBanner(formData)).rejects.toThrow('업로드 파일 형식 검증에 실패했습니다')
+    await expect(analyzeBanner(formData)).rejects.toThrow('sourcePath 형식이 올바르지 않습니다')
   })
 
   it('Gemini가 최상위 배열로 배너 목록을 반환해도 정상 처리한다', async () => {
@@ -186,8 +183,7 @@ describe('analyzeBanner', () => {
     downloadMock.mockResolvedValue({ data: new Blob([image], { type: 'image/png' }), error: null })
 
     const formData = new FormData()
-    formData.append('sourcePath', 'sources/raw/dddddddd-dddd-4ddd-8ddd-dddddddddddd.png')
-    formData.append('sourceContentType', 'image/png')
+    formData.append('sourcePath', 'sources/raw/dddddddd-dddd-4ddd-8ddd-dddddddddddd.webp')
     formData.append('regionText', '서울 강남구')
     formData.append('observedAt', '2026-02-23T00:00:00.000Z')
 

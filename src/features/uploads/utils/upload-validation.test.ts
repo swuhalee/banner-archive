@@ -1,30 +1,34 @@
 import { describe, expect, it } from 'vitest'
 import {
   getUploadFileValidationError,
-  MAX_UPLOAD_FILE_SIZE,
   toFriendlyAnalyzeErrorMessage,
 } from './upload-validation'
 
 describe('getUploadFileValidationError', () => {
-  it('HEIC 파일은 포맷 변환 안내 메시지를 반환한다', () => {
+  it('HEIC 파일은 허용한다', () => {
     const file = new File(['x'], 'photo.heic', { type: 'image/heic' })
-    expect(getUploadFileValidationError(file)).toContain('HEIC/HEIF')
+    expect(getUploadFileValidationError(file)).toBeNull()
   })
 
-  it('지원하지 않는 MIME 타입은 허용 포맷 메시지를 반환한다', () => {
+  it('GIF 파일은 차단한다', () => {
     const file = new File(['x'], 'photo.gif', { type: 'image/gif' })
-    expect(getUploadFileValidationError(file)).toBe('JPG, PNG, WebP 이미지만 업로드 가능합니다.')
+    expect(getUploadFileValidationError(file)).toBe('GIF를 제외한 이미지 파일만 업로드 가능합니다.')
   })
 
-  it('20MB를 초과하면 용량 제한 메시지를 반환한다', () => {
-    const file = new File([new Uint8Array(MAX_UPLOAD_FILE_SIZE + 1)], 'large.jpg', {
+  it('이미지가 아닌 파일은 차단한다', () => {
+    const file = new File(['x'], 'doc.pdf', { type: 'application/pdf' })
+    expect(getUploadFileValidationError(file)).toBe('GIF를 제외한 이미지 파일만 업로드 가능합니다.')
+  })
+
+  it('용량이 커도 이미지 포맷이면 사전 검증은 통과한다', () => {
+    const file = new File([new Uint8Array(21 * 1024 * 1024)], 'large.jpg', {
       type: 'image/jpeg',
     })
-    expect(getUploadFileValidationError(file)).toBe('이미지 크기는 20MB를 초과할 수 없습니다.')
+    expect(getUploadFileValidationError(file)).toBeNull()
   })
 
   it('허용된 파일은 null을 반환한다', () => {
-    const file = new File(['x'], 'ok.png', { type: 'image/png' })
+    const file = new File(['x'], 'ok.avif', { type: 'image/avif' })
     expect(getUploadFileValidationError(file)).toBeNull()
   })
 })

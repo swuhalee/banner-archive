@@ -12,6 +12,18 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/features/banners', () => ({
   DetailDialog: (props: { id: string; asModal?: boolean }) => <div data-props={JSON.stringify(props)} />,
+  bannerDetailQueryOptions: vi.fn((id: string) => ({ queryKey: ['banners', 'detail', id] })),
+}))
+
+vi.mock('@/lib/query-client', () => ({
+  getQueryClient: vi.fn(() => ({
+    prefetchQuery: vi.fn().mockResolvedValue(undefined),
+  })),
+}))
+
+vi.mock('@tanstack/react-query', () => ({
+  HydrationBoundary: ({ children }: { children: React.ReactNode }) => children,
+  dehydrate: vi.fn(() => ({})),
 }))
 
 describe('상세 페이지', () => {
@@ -26,7 +38,7 @@ describe('상세 페이지', () => {
       searchParams: Promise.resolve({ id: 'banner-1' }),
     })
 
-    expect((element as { props: { id: string; asModal: boolean } }).props).toEqual({
+    expect((element as { props: { children: { props: { id: string; asModal: boolean } } } }).props.children.props).toEqual({
       id: 'banner-1',
       asModal: false,
     })
