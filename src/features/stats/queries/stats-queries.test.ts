@@ -3,9 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const useQueryMock = vi.fn()
 const fetchStatsOverviewMock = vi.fn()
 
-vi.mock('@tanstack/react-query', () => ({
-  useQuery: useQueryMock,
-}))
+// useQuery만 가로채고 queryOptions는 원본을 쓴다.
+// queryOptions는 전달받은 객체를 그대로 돌려주는 타입 헬퍼라 모킹할 이유가 없고,
+// 전체 모킹하면 queryOptions를 쓰는 모듈이 로드 시점에 깨진다.
+vi.mock('@tanstack/react-query', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-query')>()
+  return {
+    ...actual,
+    useQuery: useQueryMock,
+  }
+})
 
 vi.mock('@/features/stats/actions/fetch-stats-overview', () => ({
   fetchStatsOverview: fetchStatsOverviewMock,
